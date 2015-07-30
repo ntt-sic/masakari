@@ -1,0 +1,3 @@
+masakari opt/
+init.d/masakari etc/init.d
+etc/masakari.conf.sample etc/masakari

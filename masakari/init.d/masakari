@@ -1,0 +1,73 @@
+#!/bin/bash
+#
+# chkconfig: - 99 20
+
+# Copyright(c) 2015 Nippon Telegraph and Telephone Corporation
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
+# Source function library.
+. /lib/lsb/init-functions
+
+PROGNAME=recovery_controller
+PROG_DIR=/opt
+PROG=$PROG_DIR/recovery_controller/recovery_controller.py
+PIDFILE=/var/run/recovery_controller.pid
+PYTHON=/usr/bin/python
+USER=openstack
+
+start() {
+        [ -x $PROG ] || exit 1
+
+        # Start daemons.
+        echo -n $"Starting $PROGNAME: "
+        start-stop-daemon --start --pidfile $PIDFILE --chuid $USER --make-pidfile --background --exec $PYTHON  -- -u $PROG > /dev/null 2>&1
+        RETVAL=$?
+        [ "$RETVAL" -eq 0 ] && log_success_msg || log_failure_msg
+        return $RETVAL
+}
+
+stop() {
+        echo -n $"Shutting down $PROGNAME: "
+        start-stop-daemon --stop --pidfile $PIDFILE > /dev/null 2>&1
+        RETVAL=$?
+        [ "$RETVAL" -eq 0 ] && log_success_msg || log_failure_msg
+        [ -f $PIDFILE ] && sudo rm $PIDFILE
+        return $RETVAL
+}
+
+
+# See how we were called.
+case "$1" in
+  start)
+        start
+        exit $RETVAL
+        ;;
+  stop)
+        stop
+        exit $RETVAL
+        ;;
+  status)
+        status_of_proc -p "$PIDFILE" $PYTHON $PROGNAME && exit 0 || exit $?
+        ;;
+  restart)
+        stop
+        start
+        ;;
+  *)
+        echo $"Usage: $0 {start|stop|status|restart}"
+        exit 2
+esac
+
+exit 0
+

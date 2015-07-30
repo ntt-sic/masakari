@@ -1,0 +1,35 @@
+[wsgi]
+server_port = 15868
+
+[db]
+host = 192.168.60.101
+name = vm_ha
+user = root
+passwd = mysql
+charset = utf8
+
+[log]
+log_level = info
+
+[recover_starter]
+interval_to_be_retry = 300
+max_retry_cnt = 3
+semaphore_multiplicity = 5
+notification_time_difference = 240
+node_err_wait = 180
+api_max_retry_cnt = 3
+api_retry_interval = 10
+recovery_max_retry_cnt = 6
+recovery_retry_interval = 10
+api_check_interval = 1
+api_check_max_cnt = 30
+
+[nova]
+domain = Default
+admin_user = admin
+admin_password = openstack
+auth_url =  http://192.168.60.101:5000
+project_name = admin
+
+[vmha_data_manage]
+period = 30

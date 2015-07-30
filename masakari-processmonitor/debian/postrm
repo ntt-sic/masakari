@@ -1,0 +1,11 @@
+#! /bin/sh
+set -e 
+ucf --purge /etc/processmonitor/processmonitor.conf
+ucf --purge /etc/processmonitor/proc.list
+dpkg-statoverride --remove /var/log/processmonitor
+dpkg-statoverride --remove /etc/processmonitor/
+dpkg-statoverride --remove /opt/processmonitor/common.sh
+dpkg-statoverride --remove /opt/processmonitor/nova_compute_reboot_before.sh
+dpkg-statoverride --remove /opt/processmonitor/process_status_checker.sh
+dpkg-statoverride --remove /opt/processmonitor/processmonitor.sh
+exit 0

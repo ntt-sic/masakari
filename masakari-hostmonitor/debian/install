@@ -1,0 +1,3 @@
+hostmonitor opt
+init.d/hostmonitor etc/init.d
+etc/hostmonitor.conf.sample etc/hostmonitor

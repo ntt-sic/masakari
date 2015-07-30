@@ -1,0 +1,18 @@
+#
+# Libvirt monitoring notification function callback setting
+#
+[callback]
+# Event notification destination URL
+url = http://ct-int-vip:15868
+# Number of retries when the notification processing is error
+retry = 12
+# Trial interval of time of the notification processing is error(in seconds)
+interval = 10
+# regionID
+regionID=rgnOne
+# syslog level (debug/info/notice/warning/err)
+log_level=notice
+# syslog facility (kern/user/daemon/local0-local7)
+log_facility=local1
+# The time-out value of once notification(in seconds)
+retry_timeout = 10

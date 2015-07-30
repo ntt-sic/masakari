@@ -1,0 +1,59 @@
+# URL of recovery controller
+RM_URL="http://192.168.60.101:15868"
+
+# Monitoring interval(in seconds) of node status
+# Default : 60
+MONITOR_INTERVAL=60
+
+# Timeout value(in seconds) when cannot send the notice to resource management.
+# Default : 10
+NOTICE_TIMEOUT=10
+
+# Retry numbers when failed to notify the resource management.
+# Default : 12
+NOTICE_RETRY_COUNT=12
+
+# Retry interval(in seconds) when cannot send the notice to resource management.
+# Default : 10
+NOTICE_RETRY_INTERVAL=10
+
+# Timeout value(in seconds) which depends on entire processing of notice to resource management.
+# Default : 120
+NOTICE_RETRY_TIMEOUT=120
+
+# Standby time(in seconds) until activate STONITH
+# Default : 30
+STONITH_WAIT=30
+
+
+# Stonith type ( ipmi(default) / ssh(for test) )
+STONITH_TYPE=ssh
+
+# Maximum number of child process to start
+# Default : 3
+MAX_CHILD_PROCESS=3
+
+# Timeout value(in seconds) of the tcpdump command when monitor the HB line
+# Default : 10
+TCPDUMP_TIMEOUT=10
+
+# Region unit
+# This item is necessary
+REGION_ID="RegionOne"
+
+# Timeout value(in seconds) of the ipmitool command
+# Default : 5
+IPMI_TIMEOUT=5
+
+# Number of ipmitool command retries
+# Default : 3
+IPMI_RETRY_MAX=3
+
+# Retry interval(in seconds) of the ipmitool command
+# Default : 10
+IPMI_RETRY_INTERVAL=10
+
+# Log level ( info / debug )
+# Otherwise, info is set
+# Default : info
+LOG_LEVEL="info"

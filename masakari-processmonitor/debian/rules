@@ -1,0 +1,49 @@
+#!/usr/bin/make -f
+# -*- makefile -*-
+
+# Uncomment this to turn on verbose mode.
+# export DH_VERBOSE=1
+
+VERSION := $(shell dpkg-parsechangelog | grep '^Version: ' | awk '{print $$2}')
+
+build: build-stamp
+build-stamp:
+	dh_testdir
+	touch $@
+
+clean:
+	dh_testdir
+	dh_testroot
+	rm -f build-stamp
+	dh_clean
+
+install: build
+	dh_testdir
+	dh_testroot
+	dh_clean
+	dh_installdirs -i
+
+# Build architecture-independent files here.
+binary-indep: build install
+	dh_testdir
+	dh_testroot
+	dh_installchangelogs -i
+	dh_installdeb 
+	dh_installdocs -i
+	dh_installdebconf -n
+	dh_install -i --sourcedir=.
+	dh_link /lib/init/upstart-job etc/init.d/processmonitor
+	dh_compress  -i
+	dh_fixperms -i
+	dh_shlibdeps -i
+	dh_md5sums -i
+	dh_gencontrol -i
+	dh_builddeb 
+
+#	dh_pysupport -d -i contain bug 
+# Build architecture-dependent files here.
+binary-arch: build install
+# We have nothing to do by default.
+
+binary: binary-indep binary-arch
+.PHONY: build clean binary-indep binary-arch binary install

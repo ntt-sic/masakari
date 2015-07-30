@@ -1,0 +1,6 @@
+#! /bin/sh
+set -e 
+ucf /etc/hostmonitor/hostmonitor.conf.sample /etc/hostmonitor/hostmonitor.conf
+dpkg-statoverride --update --add openstack openstack 0755 /var/log/hostmonitor
+dpkg-statoverride --update --add openstack openstack 0755 /opt/hostmonitor/hostmonitor.sh
+exit 0

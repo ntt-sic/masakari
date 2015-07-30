@@ -1,0 +1,10 @@
+#! /bin/sh
+set -e 
+ucf /etc/instancemonitor/instancemonitor.conf.sample /etc/instancemonitor/instancemonitor.conf
+dpkg-statoverride --update --add openstack openstack 0755 /var/log/instancemonitor
+dpkg-statoverride --update --add openstack openstack 0755 /opt/instancemonitor
+dpkg-statoverride --update --add openstack openstack 0755 /opt/instancemonitor/instancemonitor.py
+dpkg-statoverride --update --add openstack openstack 0644 /opt/instancemonitor/libvirt_eventfilter.py
+dpkg-statoverride --update --add openstack openstack 0644 /opt/instancemonitor/libvirt_eventfilter_table.py
+dpkg-statoverride --update --add openstack openstack 0644 /opt/instancemonitor/libvirt_callback.py
+exit 0

@@ -1,0 +1,4 @@
+processmonitor opt/
+init/processmonitor.conf etc/init
+etc/processmonitor.conf.sample etc/processmonitor
+etc/proc.list.sample etc/processmonitor

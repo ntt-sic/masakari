@@ -1,0 +1,3 @@
+instancemonitor opt
+init.d/instancemonitor etc/init.d
+etc/instancemonitor.conf.sample etc/instancemonitor
