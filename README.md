@@ -5,7 +5,7 @@ Masakari provides a Virtual Machine High Availability(VMHA),
 Masakari rescue a Virtual Machine(VM) from a failure events of the following:
 
 * VM process down              - restart vm (use nova stop API, and nova start API)
-* nova-compute node failure    - evacuyate all the VMs from failure node to reserved node (use nova evacuate API)
+* nova-compute node failure    - evacuate all the VMs from failure node to reserved node (use nova evacuate API)
 * provisioning process down    - restart process or changes nova-compute service status to mentenance mode (use nova service-disable)
 
 ## Architecture
