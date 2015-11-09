@@ -25,7 +25,7 @@ Masakari rescue a Virtual Machine(VM) from a failure events of the following:
     - Setup stonith resources external/ipmi
 
 * python-daemon
-    - pip install python-deamon
+    - pip install python-daemon
 
 * create user (user: openstack) and setup passwordless for 'sudo'
 
