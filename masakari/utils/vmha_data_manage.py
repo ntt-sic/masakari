@@ -56,7 +56,7 @@ class vmha_data_manage(object):
 
         try:
 
-            config_file_path = '/etc/recovery_controller/recovery_controller.conf'
+            config_file_path = '/etc/masakari/masakari.conf'
             inifile = ConfigParser.SafeConfigParser()
             inifile.read(config_file_path)
 
