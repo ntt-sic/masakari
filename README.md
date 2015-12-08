@@ -1,31 +1,32 @@
 # Masakari
 
 ## What is Masakari ?
-Masakari provides a Virtual Machine High Availability(VMHA), 
-Masakari rescue a Virtual Machine(VM) from a failure events of the following:
+Masakari provides a Virtual Machine High Availability(VMHA), and
+rescues a KVM-based Virtual Machine(VM) from a failure events of the following:
 
 * VM process down              - restart vm (use nova stop API, and nova start API)
-* nova-compute node failure    - evacuate all the VMs from failure node to reserved node (use nova evacuate API)
 * provisioning process down    - restart process or changes nova-compute service status to mentenance mode (use nova service-disable)
+* nova-compute host failure    - evacuate all the VMs from failure host to reserved host (use nova evacuate API)
 
 ## Architecture
 * masakari : controller process for failure notification
 * instancemonitor : detects the VMs process down
 * processmonitor  : detects the fatal control process down on nova-compute node
-* hostmonitor     : detects the compute node failure
+* hostmonitor     : detects the compute host failure
 
 ![Alt text](contents/architecture.png)
 
 ## Prerequisites
 * openstack system
-    - Makesure nova and keystone are installed
+    - Make sure nova and keystone are installed
     - Deploy OpenStack Compute with a shared file system
 
 * pacemaker
     - Setup stonith resources external/ipmi
 
-* python-daemon
-    - pip install python-daemon
+* packages
+    - python-daemon: apt-get install python-daemon
+    - dh-make: apt-get install dh-make (it's nessesary in case of Ubuntu)
 
 * create user (user: openstack) and setup passwordless for 'sudo'
 
@@ -47,7 +48,11 @@ ex) Ubuntu
 create database and tables for masakari
 
     # cd masakari/db
-    # mysql -u[DB_USER] -p[DB_PASSWORD] -h[DB_HOST] -e "source create_vmha_database.sql"
+    # vi db.conf
+    DB_USER=<mysql user>
+    DB_PASSWORD=<mysql user password>
+    DB_HOST=<mysql host ip>
+    # bash create_vmha_database.sh
 
 ### config setting
 
@@ -84,12 +89,12 @@ create database and tables for masakari
 #### hostmonitor.conf
 
     # vi /etc/hostmonitor/hostmonitor.conf
-    [environments]
-    # Openstack config info
-    region_id=<openstack region name. ex) RegionOne >
-    
-    # URL of masakari
-    url="http://<masakari server ip>:15868"
+    # URL of recovery controller
+    RM_URL="http://<masakari server ip>:15868"
+    ...
+    # Region unit
+    # This item is necessary
+    REGION_ID="<openstack region name ex) RegionOne>"
 
 #### processmonitor.conf
 
@@ -99,8 +104,8 @@ create database and tables for masakari
     REGION_ID=<openstack region name. ex) RegionOne >
 
 
-## Reserved host setting for nova-compute node failure
-If a nova-compute node fails, masakari evacuates instances on the failed node to the reserved host. 
+## Reserved host setting for nova-compute host failure
+If a nova-compute host fails, masakari evacuates instances on the failed host to the reserved host.
 In advance, you reserve one or two host(s) per a pacemaker cluster. Please follow this instruction.
 
     # cd masakari/utils
