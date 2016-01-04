@@ -8,6 +8,8 @@ rescues a KVM-based Virtual Machine(VM) from a failure events of the following:
 * provisioning process down    - restart process or changes nova-compute service status to mentenance mode (use nova service-disable)
 * nova-compute host failure    - evacuate all the VMs from failure host to reserved host (use nova evacuate API)
 
+Try [masakari-deploy](https://github.com/ntt-sic/masakari-deploy) for all-in-one scripts to deploy it on your laptop.
+
 ## Architecture
 * masakari : controller process for failure notification
 * instancemonitor : detects the VMs process down
