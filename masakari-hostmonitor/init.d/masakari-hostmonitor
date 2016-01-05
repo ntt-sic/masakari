@@ -14,9 +14,9 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-SCRIPT_DIR=/opt/hostmonitor
-SCRIPT_FILE=$SCRIPT_DIR/hostmonitor.sh
-PROGRAM_NAME=hostmonitor
+SCRIPT_DIR=/opt/masakari/masakari-hostmonitor
+SCRIPT_FILE=$SCRIPT_DIR/masakari-hostmonitor.sh
+PROGRAM_NAME=masakari-hostmonitor
 USER=openstack
 
 start_script () {

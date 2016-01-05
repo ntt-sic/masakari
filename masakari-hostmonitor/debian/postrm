@@ -1,6 +1,5 @@
 #! /bin/sh
 set -e 
-ucf --purge /etc/hostmonitor/hostmonitor.conf
-dpkg-statoverride --remove /var/log/hostmonitor
-dpkg-statoverride --remove /opt/hostmonitor/hostmonitor.sh
+ucf --purge /etc/masakari/masakari-hostmonitor.conf
+dpkg-statoverride --remove /opt/masakari/masakari-hostmonitor/masakari-hostmonitor.sh
 exit 0

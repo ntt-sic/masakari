@@ -31,11 +31,11 @@ NOTICE_OUTPUT="$TMP_DIR/${BASE_NAME}_resp.out"
 JSON_DIR="$TMP_DIR/tmp_json_files"
 NOTICE_PROGRAM="curl"
 SCRIPT_DIR="/opt/opencloud/hostmonitor"
-SCRIPT_CONF_FILE="/etc/hostmonitor/hostmonitor.conf"
+SCRIPT_CONF_FILE="/etc/masakari/masakari-hostmonitor.conf"
 RA_COUNT=0
 HA_CONF="/etc/corosync/corosync.conf"
-LOGDIR="/var/log/hostmonitor"
-LOGFILE="${LOGDIR}/hostmonitor.log"
+LOGDIR="/var/log/masakari"
+LOGFILE="${LOGDIR}/masakari-hostmonitor.log"
 
 # Define the default settings.
 DEFAULT_MONITOR_INTERVAL=60
