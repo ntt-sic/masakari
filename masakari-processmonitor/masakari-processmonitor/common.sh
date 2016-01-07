@@ -14,8 +14,8 @@
 
 LOGTAG=`basename $0`
 HOST_NAME=`hostname`
-LOGDIR="/var/log/processmonitor"
-LOGFILE="${LOGDIR}/processmonitor.log"
+LOGDIR="/var/log/masakari"
+LOGFILE="${LOGDIR}/masakari-processmonitor.log"
 
 # Debug log output function
 # Argument

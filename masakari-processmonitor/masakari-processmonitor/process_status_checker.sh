@@ -15,13 +15,12 @@
 # limitations under the License.
 
 # Define constants
-SCRIPT_DIR="/opt/processmonitor"
+SCRIPT_DIR="/opt/masakari/masakari-processmonitor"
 SCRIPT_COMMON_SH="$SCRIPT_DIR/common.sh"
 
-#PROC_LIST=$SCRIPT_DIR/proc.list
-#BAD_CODE_LIST_FILE=$SCRIPT_DIR/badproc.list
-PROC_LIST=/etc/processmonitor/proc.list
-BAD_CODE_LIST_FILE=/etc/processmonitor/badproc.list
+TMP_DIR="/var/tmp"
+PROC_LIST=/etc/masakari/proc.list
+BAD_CODE_LIST_FILE="$TMP_DIR/badproc.list"
 
 # Common processing (check of proc.list)
 . $SCRIPT_COMMON_SH

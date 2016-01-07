@@ -1,4 +1,4 @@
-processmonitor opt/
-init/processmonitor.conf etc/init
-etc/processmonitor.conf.sample etc/processmonitor
-etc/proc.list.sample etc/processmonitor
+masakari-processmonitor opt/masakari
+init/masakari-processmonitor.conf etc/init
+etc/masakari-processmonitor.conf.sample etc/masakari
+etc/proc.list.sample etc/masakari
