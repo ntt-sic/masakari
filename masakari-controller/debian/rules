@@ -21,7 +21,7 @@ install: build
 	dh_testdir
 	dh_testroot
 	dh_clean
-	dh_installdirs -i
+	dh_installdirs -i -A
 
 # Build architecture-independent files here.
 binary-indep: build install

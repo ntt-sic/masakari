@@ -20,9 +20,9 @@
 . /lib/lsb/init-functions
 
 PROGNAME=masakari
-PROG_DIR=/opt
-PROG=$PROG_DIR/masakari/masakari.py
-PIDFILE=/var/run/masakari.pid
+PROG_DIR=/opt/masakari
+PROG=$PROG_DIR/masakari-controller/masakari_controller.py
+PIDFILE=/var/run/masakari-controller.pid
 PYTHON=/usr/bin/python
 USER=openstack
 

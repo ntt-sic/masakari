@@ -1,0 +1,9 @@
+#! /bin/sh
+set -e 
+ucf --purge /etc/masakari/masakari-controller.conf
+dpkg-statoverride --remove /opt/masakari/masakari-controller/masakari_controller.py
+dpkg-statoverride --remove /opt/masakari/masakari-controller/masakari_config.py
+dpkg-statoverride --remove /opt/masakari/masakari-controller/masakari_starter.py
+dpkg-statoverride --remove /opt/masakari/masakari-controller/masakari_util.py
+dpkg-statoverride --remove /opt/masakari/masakari-controller/masakari_worker.py
+exit 0

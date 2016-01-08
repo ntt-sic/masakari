@@ -46,7 +46,7 @@ class RecoveryControllerConfig(object):
         self._get_option()
 
     def _get_option(self):
-        config_file_path = '/etc/masakari/masakari.conf'
+        config_file_path = '/etc/masakari/masakari-controller.conf'
 
         inifile = ConfigParser.SafeConfigParser()
         inifile.read(config_file_path)
