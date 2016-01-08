@@ -121,7 +121,7 @@ def syslogout(msg, logLevel=syslog.LOG_DEBUG, logFacility=syslog.LOG_USER):
     formatter = logging.Formatter( fmt=f, datefmt='%b %d %H:%M:%S' )
 
     fh = logging.FileHandler( filename =
-            '/var/log/instancemonitor/instancemonitor.log' )
+            '/var/log/masakari/masakari-instancemonitor.log' )
     fh.setLevel( logging.DEBUG )
     fh.setFormatter( formatter )
 
