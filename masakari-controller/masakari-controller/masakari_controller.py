@@ -113,25 +113,16 @@ class RecoveryController(object):
             self.rc_util.syslogout(
                 "masakari START.", syslog.LOG_INFO)
 
-            conf_db_dic = self.rc_config.get_value('db')
+            conn = None
+            cursor = None
+            # Get database session
+            conn, cursor = self.rc_util_db.connect_database()
 
-            # Connect db
-            db = MySQLdb.connect(host=conf_db_dic.get("host"),
-                                 db=conf_db_dic.get("name"),
-                                 user=conf_db_dic.get("user"),
-                                 passwd=conf_db_dic.get("passwd"),
-                                 charset=conf_db_dic.get("charset")
-                                 )
+            self._update_old_records_notification_list(conn, cursor)
+            result = self._find_reprocessing_records_notification_list(conn, cursor)
+            self.rc_util_db.disconnect_database(conn, cursor)
+            preprocessing_count = len(result)
 
-            # Execute SQL
-            cursor = db.cursor(MySQLdb.cursors.DictCursor)
-
-            preprocessing_count = cursor.execute(
-                "SELECT notification_id, notification_hostname, "
-                "notification_uuid, recover_by, "
-                "notification_cluster_port "
-                "FROM notification_list WHERE progress = 0")
-            result = cursor.fetchall()
             if preprocessing_count > 0:
                 for row in result:
                     if row.get("recover_by") == 0:
@@ -187,10 +178,6 @@ class RecoveryController(object):
                 target=self.rc_starter.handle_pending_instances)
             th.start()
 
-            # Connection close
-            cursor.close()
-            db.close()
-
             # Start reciever process for notification
             conf_wsgi_dic = self.rc_config.get_value('wsgi')
             wsgi.server(
@@ -226,6 +213,121 @@ class RecoveryController(object):
             for tb in tb_list:
                 self.rc_util.syslogout(tb, syslog.LOG_ERR)
             sys.exit()
+
+    def _update_old_records_notification_list(self, conn, cursor):
+        # Get notification_expiration_sec from config
+        conf_dict = self.rc_config.get_value('recover_starter')
+        notification_expiration_sec = int(conf_dict.get(
+            'notification_expiration_sec'))
+
+        now = datetime.datetime.now()
+        # Get border time
+        border_time = now - datetime.timedelta(seconds=notification_expiration_sec)
+        border_time_str = border_time.strftime('%Y-%m-%d %H:%M:%S')
+
+        # Set old record progress = 4
+        sql = "SELECT id FROM notification_list " \
+              "WHERE progress = 0 AND create_at < '%s'" \
+              % (border_time_str)
+        self.rc_util.syslogout_ex("RecoveryControllerl_0047", syslog.LOG_INFO)
+        self.rc_util.syslogout("SQL=" + sql, syslog.LOG_INFO)
+        cnt = cursor.execute(sql)
+        result = cursor.fetchall()
+
+        for row in result:
+            sql = "UPDATE notification_list " \
+                  "SET progress = %d, update_at = '%s', delete_at = '%s' " \
+                  "WHERE id = '%s'" \
+                  % (4, datetime.datetime.now(),
+                    datetime.datetime.now(), row.get("id"))
+            self.rc_util.syslogout_ex("RecoveryControllerl_0048", syslog.LOG_INFO)
+            self.rc_util.syslogout("SQL=" + sql, syslog.LOG_INFO)
+            cursor.execute(sql)
+            conn.commit()
+
+    def _find_reprocessing_records_notification_list(self, conn, cursor):
+        return_value = []
+
+        # Get list of notification_uuid
+        sql = "SELECT DISTINCT notification_uuid FROM notification_list " \
+              "WHERE progress = 0 AND recover_by = 1"
+        self.rc_util.syslogout_ex("RecoveryControllerl_0049", syslog.LOG_INFO)
+        self.rc_util.syslogout("SQL=" + sql, syslog.LOG_INFO)
+        cnt = cursor.execute(sql)
+        result = cursor.fetchall()
+
+        # Get reprocessing record
+        for row in result:
+            sql = "SELECT id, notification_id, notification_hostname, " \
+                  "notification_uuid, notification_cluster_port, recover_by " \
+                  "FROM notification_list " \
+                  "WHERE progress = 0 AND notification_uuid = '%s' " \
+                  "ORDER BY create_at DESC, id DESC" \
+                  % (row.get("notification_uuid"))
+            self.rc_util.syslogout_ex("RecoveryControllerl_0050", syslog.LOG_INFO)
+            self.rc_util.syslogout("SQL=" + sql, syslog.LOG_INFO)
+            cursor.execute(sql)
+            result2 = cursor.fetchall()
+
+            # First row is reprocessing record.
+            row_cnt = 0
+            for row2 in result2:
+                if row_cnt == 0:
+                    return_value.append(row2)
+                else:
+                    # Update progress
+                    sql = "UPDATE notification_list " \
+                          "SET progress = %d , update_at = '%s', " \
+                          "delete_at = '%s' " \
+                          "WHERE id = '%s'" \
+                        % (4, datetime.datetime.now(),
+                          datetime.datetime.now(), row2.get("id"))
+                    self.rc_util.syslogout_ex("RecoveryControllerl_0051", syslog.LOG_INFO)
+                    self.rc_util.syslogout("SQL=" + sql, syslog.LOG_INFO)
+                    cursor.execute(sql)
+                    conn.commit()
+                row_cnt += 1
+
+        sql = "SELECT DISTINCT notification_hostname FROM notification_list " \
+            + "WHERE progress = 0 AND recover_by = 0"
+        self.rc_util.syslogout_ex("RecoveryControllerl_0052", syslog.LOG_INFO)
+        self.rc_util.syslogout("SQL=" + sql, syslog.LOG_INFO)
+        cnt = cursor.execute(sql)
+        result = cursor.fetchall()
+
+        # Get reprocessing record
+        for row in result:
+            sql = "SELECT id, notification_id, notification_hostname, " \
+                  "notification_uuid, notification_cluster_port, recover_by " \
+                  "FROM notification_list " \
+                  "WHERE progress = 0 AND notification_hostname = '%s' " \
+                  "ORDER BY create_at DESC, id DESC" \
+                  % (row.get("notification_hostname"))
+            self.rc_util.syslogout_ex("RecoveryControllerl_0053", syslog.LOG_INFO)
+            self.rc_util.syslogout("SQL=" + sql, syslog.LOG_INFO)
+            cursor.execute(sql)
+            result2 = cursor.fetchall()
+
+            # First row is reprocessing record.
+            row_cnt = 0
+            for row2 in result2:
+                if row_cnt == 0:
+                    return_value.append(row2)
+                else:
+                    # Update progress
+                    sql = "UPDATE notification_list " \
+                          "SET progress = %d , update_at = '%s', " \
+                          "delete_at = '%s' " \
+                          "WHERE id = '%s'" \
+                        % (4, datetime.datetime.now(),
+                          datetime.datetime.now(), row2.get("id"))
+                    self.rc_util.syslogout_ex("RecoveryControllerl_0054", syslog.LOG_INFO)
+                    self.rc_util.syslogout("SQL=" + sql, syslog.LOG_INFO)
+                    cursor.execute(sql)
+                    conn.commit()
+                row_cnt += 1
+
+        return return_value
 
     def _check_json_param(self, json_data):
         try:
@@ -391,130 +493,143 @@ class RecoveryController(object):
     def _create_notification_list_db(self, jsonData):
         ret_dic = {}
 
-        if self._check_retry_notification(jsonData):
-            self.rc_util.syslogout_ex(
-                "RecoveryController_0030", syslog.LOG_INFO)
-            msg = "Duplicate notifications. id:" + jsonData.get("id")
-            self.rc_util.syslogout(msg, syslog.LOG_INFO)
-            self.rc_util.syslogout(jsonData, syslog.LOG_INFO)
+        ## Get DB from here and pass it to _check_retry_notification
+        try:
+            conn = None
+            cursor = None
+            # Get database connection
+            conn, cursor = self.rc_util_db.connect_database()
+            # Lock notification_list table
+            table_name = 'notification_list'
+            self.rc_util_db.run_lock_query(table_name, cursor)
 
-        # Node Recovery(processing A)
-        elif jsonData.get("type") == "rscGroup" and \
-           str(jsonData.get("eventID")) == "1" and \
-           str(jsonData.get("eventType")) == "2" and \
-           str(jsonData.get("detail")) == "2":
-
-            tdatetime = datetime.datetime.strptime(
-                jsonData.get("time"), '%Y%m%d%H%M%S')
-            if not self._check_repeated_notify(tdatetime,
-                                               jsonData.get("hostname")):
-                recover_by = 0  # node recovery
-                ret_dic = self.rc_util_db.insert_notification_list_db(
-                    jsonData, recover_by)
+            if self._check_retry_notification(jsonData, cursor):
                 self.rc_util.syslogout_ex(
+                    "RecoveryController_0030", syslog.LOG_INFO)
+                msg = "Duplicate notifications. id:" + jsonData.get("id")
+                self.rc_util.syslogout(msg, syslog.LOG_INFO)
+                self.rc_util.syslogout(jsonData, syslog.LOG_INFO)
+
+            # Node Recovery(processing A)
+            elif jsonData.get("type") == "rscGroup" and \
+                 str(jsonData.get("eventID")) == "1" and \
+                 str(jsonData.get("eventType")) == "2" and \
+                 str(jsonData.get("detail")) == "2":
+
+                tdatetime = datetime.datetime.strptime(
+                    jsonData.get("time"), '%Y%m%d%H%M%S')
+                if not self._check_repeated_notify(tdatetime,
+                                                   jsonData.get("hostname"),
+                                                   cursor):
+                    recover_by = 0  # node recovery
+                    ret_dic = self.rc_util_db.insert_notification_list_db(
+                        jsonData, recover_by, cursor)
+                    self.rc_util.syslogout_ex(
                     "RecoveryController_0014", syslog.LOG_INFO)
-                self.rc_util.syslogout(jsonData, syslog.LOG_INFO)
-            else:
-                # Duplicate notifications.
-                self.rc_util.syslogout_ex(
-                    "RecoveryController_0015", syslog.LOG_INFO)
-                msg = "Duplicate notifications. id:" + jsonData.get("id")
-                self.rc_util.syslogout(msg, syslog.LOG_INFO)
-                self.rc_util.syslogout(jsonData, syslog.LOG_INFO)
+                    self.rc_util.syslogout(jsonData, syslog.LOG_INFO)
+                else:
+                    # Duplicate notifications.
+                    self.rc_util.syslogout_ex(
+                        "RecoveryController_0015", syslog.LOG_INFO)
+                    msg = "Duplicate notifications. id:" + jsonData.get("id")
+                    self.rc_util.syslogout(msg, syslog.LOG_INFO)
+                    self.rc_util.syslogout(jsonData, syslog.LOG_INFO)
 
-        # VM Recovery(processing G)
-        elif jsonData.get("type") == 'VM' and \
-            str(jsonData.get("eventID")) == '0' and \
-            str(jsonData.get("eventType")) == '5' and \
-                str(jsonData.get("detail")) == '5':
+            # VM Recovery(processing G)
+            ## Change: jsonData.get("detail")) == '5' -> == '0'
+            elif jsonData.get("type") == 'VM' and \
+                 str(jsonData.get("eventID")) == '0' and \
+                 str(jsonData.get("eventType")) == '5' and \
+                 str(jsonData.get("detail")) == '0':
 
-            recover_by = 1  # VM recovery
-            ret_dic = self.rc_util_db.insert_notification_list_db(
-                jsonData, recover_by)
-            self.rc_util.syslogout_ex(
-                "RecoveryController_0019", syslog.LOG_INFO)
-            self.rc_util.syslogout(jsonData, syslog.LOG_INFO)
-
-        # Node Lock(processing D and F)
-        # Node will be locked.
-        elif (jsonData.get("type") == 'nodeStatus') or \
-             ((jsonData.get("type") == 'rscGroup' and
-               str(jsonData.get("eventID")) == '1' and
-               str(jsonData.get("eventType")) == '2') and
-              (str(jsonData.get("detail")) == '3' or
-               str(jsonData.get("detail")) == '4')):
-
-            tdatetime = datetime.datetime.strptime(
-                jsonData.get("time"), '%Y%m%d%H%M%S')
-            if not self._check_repeated_notify(tdatetime,
-                jsonData.get("hostname")):
-
-                recover_by = 2  # NODE lock
+                recover_by = 1  # VM recovery
                 ret_dic = self.rc_util_db.insert_notification_list_db(
-                    jsonData, recover_by)
+                    jsonData, recover_by, cursor)
                 self.rc_util.syslogout_ex(
-                    "RecoveryController_0021", syslog.LOG_INFO)
+                    "RecoveryController_0019", syslog.LOG_INFO)
                 self.rc_util.syslogout(jsonData, syslog.LOG_INFO)
-            else:
-                # Duplicate notifications.
+
+            # Node Lock(processing D and F)
+            # Node will be locked.
+            elif (jsonData.get("type") == 'nodeStatus') or \
+                 ((jsonData.get("type") == 'rscGroup' and
+                   str(jsonData.get("eventID")) == '1' and
+                   str(jsonData.get("eventType")) == '2') and
+                  (str(jsonData.get("detail")) == '3' or
+                  str(jsonData.get("detail")) == '4')):
+
+                tdatetime = datetime.datetime.strptime(
+                    jsonData.get("time"), '%Y%m%d%H%M%S')
+                if not self._check_repeated_notify(tdatetime,
+                                                   jsonData.get("hostname"),
+                                                   cursor):
+
+                    recover_by = 2  # NODE lock
+                    ret_dic = self.rc_util_db.insert_notification_list_db(
+                        jsonData, recover_by, cursor)
+                    self.rc_util.syslogout_ex(
+                        "RecoveryController_0021", syslog.LOG_INFO)
+                    self.rc_util.syslogout(jsonData, syslog.LOG_INFO)
+                else:
+                    # Duplicate notifications.
+                    self.rc_util.syslogout_ex(
+                        "RecoveryController_0036", syslog.LOG_INFO)
+                    msg = "Duplicate notifications. id:" + jsonData.get("id")
+                    self.rc_util.syslogout(msg, syslog.LOG_INFO)
+                    self.rc_util.syslogout(jsonData, syslog.LOG_INFO)
+
+            # Do not recover(Excuted Stop API)
+            elif jsonData.get("type") == "VM" and \
+                 str(jsonData.get("eventID")) == "0" and \
+                 str(jsonData.get("eventType")) == "5" and \
+                 str(jsonData.get("detail")) == "1":
                 self.rc_util.syslogout_ex(
-                    "RecoveryController_0036", syslog.LOG_INFO)
-                msg = "Duplicate notifications. id:" + jsonData.get("id")
+                    "RecoveryController_0022", syslog.LOG_INFO)
+                self.rc_util.syslogout(jsonData, syslog.LOG_INFO)
+                msg = "Do not recover instance.(Excuted Stop API)"
                 self.rc_util.syslogout(msg, syslog.LOG_INFO)
+
+            # Notification of starting node.
+            elif jsonData.get("type") == "rscGroup" and \
+                 str(jsonData.get("eventID")) == "1" and \
+                 str(jsonData.get("eventType")) == "1" and \
+                 str(jsonData.get("detail")) == "1":
+                self.rc_util.syslogout_ex(
+                    "RecoveryController_0023", syslog.LOG_INFO)
                 self.rc_util.syslogout(jsonData, syslog.LOG_INFO)
+                msg = "Recieved notification of node starting. Node:" + \
+                      jsonData['hostname']
+                self.rc_util.syslogout(msg, syslog.LOG_INFO)
 
-        # Do not recover(Excuted Stop API)
-        elif jsonData.get("type") == "VM" and \
-            str(jsonData.get("eventID")) == "0" and \
-            str(jsonData.get("eventType")) == "5" and \
-                str(jsonData.get("detail")) == "1":
+            # Ignore notification
+            else:
+                self.rc_util.syslogout_ex(
+                    "RecoveryController_0024", syslog.LOG_INFO)
+                self.rc_util.syslogout(jsonData, syslog.LOG_INFO)
+                msg = "Ignore notification. Notification:" + str(jsonData)
+                self.rc_util.syslogout(msg, syslog.LOG_INFO)
+            self.rc_util_db.disconnect_database(conn, cursor)
+        except Exception:
+            error_type, error_value, traceback_ = sys.exc_info()
+            tb_list = traceback.format_tb(traceback_)
             self.rc_util.syslogout_ex(
-                "RecoveryController_0022", syslog.LOG_INFO)
-            self.rc_util.syslogout(jsonData, syslog.LOG_INFO)
-            msg = "Do not recover instance.(Excuted Stop API)"
-            self.rc_util.syslogout(msg, syslog.LOG_INFO)
-
-        # Notification of starting node.
-        elif jsonData.get("type") == "rscGroup" and \
-            str(jsonData.get("eventID")) == "1" and \
-            str(jsonData.get("eventType")) == "1" and \
-                str(jsonData.get("detail")) == "1":
-            self.rc_util.syslogout_ex(
-                "RecoveryController_0023", syslog.LOG_INFO)
-            self.rc_util.syslogout(jsonData, syslog.LOG_INFO)
-            msg = "Recieved notification of node starting. Node:" + \
-                jsonData['hostname']
-            self.rc_util.syslogout(msg, syslog.LOG_INFO)
-
-        # Ignore notification
-        else:
-            self.rc_util.syslogout_ex(
-                "RecoveryController_0024", syslog.LOG_INFO)
-            self.rc_util.syslogout(jsonData, syslog.LOG_INFO)
-            msg = "Ignore notification. Notification:" + str(jsonData)
-            self.rc_util.syslogout(msg, syslog.LOG_INFO)
-
+                "RecoveryController_0046", syslog.LOG_ERR)
+            self.rc_util.syslogout(error_type, syslog.LOG_ERR)
+            self.rc_util.syslogout(error_value, syslog.LOG_ERR)
+            for tb in tb_list:
+                self.rc_util.syslogout(tb, syslog.LOG_ERR)
+            self.rc_util_db.disconnect_database(conn, cursor)
+            raise
         return ret_dic
 
-    def _check_retry_notification(self, jsonData):
-        conf_db_dic = self.rc_config.get_value('db')
+    def _check_retry_notification(self, jsonData, cursor):
 
-        # Connect DB
-        db = MySQLdb.connect(host=conf_db_dic.get("host"),
-                             db=conf_db_dic.get("name"),
-                             user=conf_db_dic.get("user"),
-                             passwd=conf_db_dic.get("passwd"),
-                             charset=conf_db_dic.get("charset")
-                             )
-
+        notification_id = jsonData.get("id")
         # Execute SQL
-        cursor = db.cursor(MySQLdb.cursors.DictCursor)
-        cnt = cursor.execute("SELECT notification_id FROM notification_list " \
-                       "WHERE notification_id = '%s'" \
-                       % (jsonData.get("id")))
+        sql = "SELECT notification_id FROM notification_list " \
+              "WHERE notification_id = '%s'" % (notification_id)
 
-        cursor.close()
-        db.close()
+        cnt = cursor.execute(sql)
 
         # if cnt is 0, not duplicate notification.
         if cnt == 0:
@@ -522,30 +637,18 @@ class RecoveryController(object):
         else:
             return 1
 
-    def _check_repeated_notify(self, notification_time, notification_hostname):
-        conf_db_dic = self.rc_config.get_value('db')
-
-        # Connect DB
-        db = MySQLdb.connect(host=conf_db_dic.get("host"),
-                             db=conf_db_dic.get("name"),
-                             user=conf_db_dic.get("user"),
-                             passwd=conf_db_dic.get("passwd"),
-                             charset=conf_db_dic.get("charset")
-                             )
-
-        # Execute SQL
-        cursor = db.cursor(MySQLdb.cursors.DictCursor)
-        cnt = cursor.execute("SELECT notification_time FROM notification_list " \
+    def _check_repeated_notify(self, notification_time,
+                               notification_hostname, cursor):
+        sql = "SELECT notification_time FROM notification_list " \
                        "WHERE notification_hostname = '%s'" \
                        "AND notification_type = 'rscGroup'" \
-                       % (notification_hostname))
+                       % (notification_hostname)
+        cnt = cursor.execute(sql)
         # if cnt is 0, not duplicate notification.
         if cnt == 0:
             return 0
 
         result = cursor.fetchall()
-        cursor.close()
-        db.close()
 
         conf_recover_starter_dic = self.rc_config.get_value('recover_starter')
         notification_time_difference = conf_recover_starter_dic.get(
@@ -561,6 +664,7 @@ class RecoveryController(object):
                 flg = 1
 
         return flg
+
 
 if __name__ == '__main__':
     rc = RecoveryController()

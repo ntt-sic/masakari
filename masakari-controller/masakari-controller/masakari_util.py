@@ -18,7 +18,6 @@
 """
 Management module of utility classes for VM recovery control
 """
-
 import ConfigParser
 import datetime
 import json
@@ -32,8 +31,9 @@ import socket
 import subprocess
 import sys
 import syslog
+import threading
 import traceback
-
+from eventlet import greenthread
 
 class RecoveryControllerUtilDb(object):
 
@@ -46,36 +46,25 @@ class RecoveryControllerUtilDb(object):
         self.rc_util = RecoveryControllerUtil(self.rc_config)
         self.rc_util_ap = RecoveryControllerUtilApi(self.rc_config)
 
-    def insert_vm_list_db(self, notification_id, notification_uuid, retry_cnt):
+    def insert_vm_list_db(self, cursor, notification_id,
+                          notification_uuid, retry_cnt):
         """
         VM list table registration
+        :param :cursor: cursor object
         :param :notification_id: Notification ID
                 (used as search criteria for notification list table)
         :param :notification_uuid:VM of uuid
                 (used as the registered contents of the VM list table)
         :param :retry_cnt:Retry count
                 (used as the registered contents of the VM list table)
+        :return :primary_id: The value of LAST_INSERT_ID
         """
 
         try:
-            conf_db_dic = self.rc_config.get_value('db')
-            conf_log_dic = self.rc_config.get_value('log')
-            # Connect db
-            db = MySQLdb.connect(host=conf_db_dic.get("host"),
-                                 db=conf_db_dic.get("name"),
-                                 user=conf_db_dic.get("user"),
-                                 passwd=conf_db_dic.get("passwd"),
-                                 charset=conf_db_dic.get("charset"))
-
-            log_level = conf_log_dic.get("log_level")
-
-            # Execute SQL
-            cursor = db.cursor(MySQLdb.cursors.DictCursor)
-
             sql = "SELECT recover_to, recover_by FROM notification_list " \
                   "WHERE notification_id = '%s'" % (notification_id)
-            cursor.execute(sql)
 
+            cursor.execute(sql)
             result = cursor.fetchone()
 
             # rowcount is always '1' because notification_id is unique
@@ -105,11 +94,17 @@ class RecoveryControllerUtilDb(object):
             self.rc_util.syslogout("SQL=" + sql, syslog.LOG_INFO)
 
             cursor.execute(sql)
-            db.commit()
 
-            # db connection close
-            cursor.close()
-            db.close()
+            # Get this primary id
+            sql = "SELECT LAST_INSERT_ID()"
+            cursor.execute(sql)
+            result = cursor.fetchone()
+
+            self.rc_util.syslogout(str(result), syslog.LOG_INFO)
+
+            primary_id = result.get("LAST_INSERT_ID()")
+
+            return primary_id
 
         except KeyError:
 
@@ -159,24 +154,16 @@ class RecoveryControllerUtilDb(object):
 
             raise
 
-    def insert_notification_list_db(self, jsonData, recover_by):
+    def insert_notification_list_db(self, jsonData, recover_by, cursor):
         """
            Insert into notification_list DB from notification JSON.
            :param :jsonData: notifocation json data.
            :param :recover_by:node recover(0)/VM recover(1)/process error(2)
+           :param :cursor: cursor object
            :return :ret_dic:and return the information that was registered to
                        notification_list table in the dictionary type
 
         """
-
-        # NOTE: Connection args will come from configurations.
-        conf_db_dic = self.rc_config.get_value('db')
-        con_args = {}
-        con_args['host'] = conf_db_dic.get("host")
-        con_args['db'] = conf_db_dic.get("name")
-        con_args['user'] = conf_db_dic.get("user")
-        con_args['passwd'] = conf_db_dic.get("passwd")
-        con_args['charset'] = conf_db_dic.get("charset")
 
         columns = " (create_at, update_at, delete_at, deleted, " \
             " notification_id, notification_type, " \
@@ -190,9 +177,10 @@ class RecoveryControllerUtilDb(object):
             " iscsi_ip, controle_ip, " \
             " recover_to)"
 
+
         values = " VALUES " + \
-                 "(\'%s\',%s,%s,%s,\'%s\',\'%s\',\'%s\',\'%s\'," \
-                 "\'%s\',\'%s\',\'%s\',\'%s\',\'%s\',%s,%s,\"%s\"," \
+                 "(\'%s\',\'%s\',\'%s\',%s,\'%s\',\'%s\',\'%s\',\'%s\'," \
+                 "\'%s\',\'%s\',\'%s\',\'%s\',\'%s\',\'%s\',\'%s\',\"%s\"," \
                  "\'%s\',\'%s\',%s,%s,\'%s\',\'%s\',\'%s\')"
 
         # NOTE: The notification item 'endTime' may have a NULL value.
@@ -206,14 +194,6 @@ class RecoveryControllerUtilDb(object):
         update_at = None
         delete_at = None
         deleted = 0
-
-	# noneToNull
-	def noneToNull(column):
-	    if column is None:
-		return "NULL"
-	    else:
-		return column
-
         # progress 0:not yet
         progress = 0
         # From /etc/hosts
@@ -242,26 +222,24 @@ class RecoveryControllerUtilDb(object):
         try:
             recover_to = None
             if recover_by == 0:
-
                 recover_to = self._get_reserve_node_from_reserve_list_db(
-                    con_args,
                     jsonData.get("cluster_port"),
-                    jsonData.get("hostname"))
+                    jsonData.get("hostname"),
+                    cursor)
 
                 # If reserve node is None, set progress 3.
                 if recover_to is None:
                     progress = 3
 
-            with MySQLdb.connect(**con_args) as cursor:
                 sql_operation = "INSERT INTO notification_list " + columns
                 sql_values = values % (
-                    create_at, noneToNull(update_at), noneToNull(delete_at), deleted,
+                    create_at, update_at, delete_at, deleted,
                     jsonData.get("id"), jsonData.get("type"),
                     jsonData.get("regionID"), jsonData.get("hostname"),
                     jsonData.get("uuid"), jsonData.get("time"),
                     jsonData.get("eventID"), jsonData.get("eventType"),
-                    jsonData.get("detail"), noneToNull(jsonData.get("startTime")),
-                    noneToNull(j_endTime), jsonData.get("tzname"),
+                    jsonData.get("detail"), jsonData.get("startTime"),
+                    j_endTime, jsonData.get("tzname"),
                     jsonData.get("daylight"), jsonData.get("cluster_port"),
                     progress, recover_by, iscsi_ip, controle_ip, recover_to
                 )
@@ -275,7 +253,7 @@ class RecoveryControllerUtilDb(object):
                 cursor.execute(sql)
 
                 sql = ("select * from reserve_list "
-                       "where deleted=0 and hostname='%s'"
+                       "where deleted=0 and hostname='%s' for update"
                       ) % (jsonData.get("hostname"))
 
                 cnt = cursor.execute(sql)
@@ -331,30 +309,27 @@ class RecoveryControllerUtilDb(object):
             raise e
 
     def _get_reserve_node_from_reserve_list_db(self,
-                                               con_args,
                                                cluster_port,
-                                               notification_hostname):
+                                               notification_hostname,
+                                               cursor):
         """
         Get reserve node, check it in use and change to 'enable'.
         :param: con_args: args database connection.
         :param: cluster_port: select keys, cluster port number.
+        :param :cursor: cursor object
         :return: hostname: Host name of the spare node machine
                             (obtained from the spare node list table)
 
         """
 
-        csr = None
-        condb = None
         try:
             # check it in use
-            condb = MySQLdb.connect(**con_args)
-            csr = condb.cursor(MySQLdb.cursors.DictCursor)
             sql = ("select id,hostname from reserve_list "
                    "where deleted=0 and cluster_port='%s' and hostname!='%s' "
                    "order by create_at asc limit 1 for update"
                   ) % (cluster_port, notification_hostname)
 
-            cnt = csr.execute(sql)
+            cnt = cursor.execute(sql)
             if cnt == 0:
                 self.rc_util.syslogout_ex("RecoveryControllerUtilDb_0008",
                                           syslog.LOG_WARNING)
@@ -362,7 +337,7 @@ class RecoveryControllerUtilDb(object):
                 self.rc_util.syslogout(msg, syslog.LOG_WARNING)
                 hostname = None
             if cnt == 1:
-                reserves = csr.fetchone()
+                reserves = cursor.fetchone()
                 hostname = reserves.get('hostname')
 
         except Exception as e:
@@ -380,63 +355,7 @@ class RecoveryControllerUtilDb(object):
 
             raise e
 
-        finally:
-            if csr:
-                csr.close()
-
-            if condb:
-                condb.close()
         return hostname
-
-    def _delete_reserve_node(self, con_args, cluster_port):
-        """
-        Delete reserve node.
-        :param: con_args: args database connection.
-        :param: cluster_port: select keys, cluster port number.
-        """
-        condb = None
-        csr = None
-
-        try:
-            # check it in use
-            condb = MySQLdb.connect(**con_args)
-            csr = condb.cursor(MySQLdb.cursors.DictCursor)
-
-            delete_at = datetime.datetime.now()
-            sql = "update reserve_list set deleted=1 , " \
-                  "delete_at='%s' " \
-                  "where cluster_port='%s'" \
-                  % (delete_at, cluster_port)
-
-            self.rc_util.syslogout_ex(
-                "RecoveryControllerUtilDb_0020", syslog.LOG_INFO)
-            self.rc_util.syslogout(
-                "SQL=" + str(sql), syslog.LOG_INFO)
-
-            csr.execute(sql)
-            condb.commit()
-
-        except Exception as e:
-
-            self.rc_util.syslogout_ex("RecoveryControllerUtilDb_0021",
-                                      syslog.LOG_ERR)
-            error_type, error_value, traceback_ = sys.exc_info()
-            tb_list = traceback.format_tb(traceback_)
-            self.rc_util.syslogout(error_type, syslog.LOG_ERR)
-            self.rc_util.syslogout(error_value, syslog.LOG_ERR)
-            for tb in tb_list:
-                self.rc_util.syslogout(tb, syslog.LOG_ERR)
-
-            self.rc_util.syslogout(e.message, syslog.LOG_ERR)
-
-            raise e
-
-        finally:
-            if csr:
-                csr.close()
-
-            if condb:
-                condb.close()
 
     def update_notification_list_db(self, key, value, notification_id):
         """
@@ -446,10 +365,10 @@ class RecoveryControllerUtilDb(object):
         :param :notification_id: Notification ID
                 (updated narrowing condition of notification list table)
         """
-
+        ## TODO:
+        ## Get the cursor from Func Args and remove this MySQLdb.connect
         try:
             conf_db_dic = self.rc_config.get_value('db')
-            conf_log_dic = self.rc_config.get_value('log')
             # Connect db
             db = MySQLdb.connect(host=conf_db_dic.get("host"),
                                  db=conf_db_dic.get("name"),
@@ -457,31 +376,29 @@ class RecoveryControllerUtilDb(object):
                                  passwd=conf_db_dic.get("passwd"),
                                  charset=conf_db_dic.get("charset"))
 
-            log_level = conf_log_dic.get("log_level")
-
             # Execute SQL
             cursor = db.cursor()
 
-            sql = "UPDATE notification_list SET %s = %s " \
-                  "WHERE notification_id = '%s'" \
-                  % (key, value, notification_id)
-
-            self.rc_util.syslogout_ex("RecoveryControllerUtilDb_0011",
-                                      syslog.LOG_INFO)
-            self.rc_util.syslogout("SQL=" + sql, syslog.LOG_INFO)
-
+            # Set autocommit True
+            sql = "SET SESSION autocommit = 1"
             cursor.execute(sql)
 
-            if key == "progress" and value == 2:
-                sql = "UPDATE notification_list SET delete_at = '%s' " \
+            # Update progress with update_at and delete_at
+            now = datetime.datetime.now()
+            if key == 'progress':
+                sql = "UPDATE notification_list " \
+                      "SET progress = %s, update_at = '%s', " \
+                      "delete_at = '%s' " \
                       "WHERE notification_id = '%s'" \
-                      % (datetime.datetime.now(), notification_id)
+                      % (value, now, now, notification_id)
+            # Updated than progress
             else:
-                sql = "UPDATE notification_list SET update_at = '%s' " \
+                sql = "UPDATE notification_list SET %s = '%s', " \
+                      "update_at = '%s' " \
                       "WHERE notification_id = '%s'" \
-                      % (datetime.datetime.now(), notification_id)
+                      % (key, value, now, notification_id)
 
-            self.rc_util.syslogout_ex("RecoveryControllerUtilDb_0012",
+            self.rc_util.syslogout_ex("RecoveryControllerUtilDb_0011",
                                       syslog.LOG_INFO)
             self.rc_util.syslogout("SQL=" + sql, syslog.LOG_INFO)
 
@@ -617,6 +534,169 @@ class RecoveryControllerUtilDb(object):
             self.rc_util.syslogout(msg, syslog.LOG_ERR)
 
             raise MySQLdb.Error
+
+    def connect_database(self, database_name=None):
+        """
+        Connect to database.
+        ### Caution ###
+        Closing should be carried out in another.
+        :param: database_name: connection target
+        :return :conn :connect object
+        :return :cursor :cursor object
+        """
+        try:
+            conn = None
+            cursor = None
+            # Get Config.
+            conf_db_dic = self.rc_config.get_value('db')
+            host = conf_db_dic.get("host")
+            db = conf_db_dic.get("name")
+            user = conf_db_dic.get("user")
+            passwd = conf_db_dic.get("passwd")
+            charset = conf_db_dic.get("charset")
+            innodb_lock_wait_timeout = conf_db_dic.get("innodb_lock_wait_timeout")
+
+            # Overwrite if specified
+            if database_name:
+                db = database_name
+
+            # Connect database
+            conn = MySQLdb.connect(host=host,
+                                   db=db,
+                                   user=user,
+                                   passwd=passwd,
+                                   charset=charset
+                                   )
+
+            # Set cursor
+            cursor = conn.cursor(MySQLdb.cursors.DictCursor)
+            sql = "SET SESSION innodb_lock_wait_timeout = %s" \
+                  % (innodb_lock_wait_timeout)
+            cursor.execute(sql)
+            sql = "SET SESSION autocommit = 0"
+            cursor.execute(sql)
+
+            return conn, cursor
+
+        except MySQLdb.Error:
+            self.rc_util.syslogout_ex("RecoveryControllerUtilDb_0022",
+                                      syslog.LOG_ERR)
+            error_type, error_value, traceback_ = sys.exc_info()
+            tb_list = traceback.format_tb(traceback_)
+            self.rc_util.syslogout(error_type, syslog.LOG_ERR)
+            self.rc_util.syslogout(error_value, syslog.LOG_ERR)
+            for tb in tb_list:
+                self.rc_util.syslogout(tb, syslog.LOG_ERR)
+            msg = "Exception : MySQLdb.Error in connection_database()."
+            self.rc_util.syslogout(msg, syslog.LOG_ERR)
+
+            if conn:
+                conn.close()
+
+            raise MySQLdb.Error
+
+    def disconnect_database(self, conn, cursor):
+        """
+        Disconnect database.
+        :param: conn: connecting object
+        :param: cursor: cursor object
+        """
+        try:
+            if conn:
+                conn.commit()
+            if cursor:
+                cursor.close()
+            if conn:
+                conn.close()
+        except MySQLdb.Error:
+            self.rc_util.syslogout_ex("RecoveryControllerUtilDb_0023",
+                                      syslog.LOG_ERR)
+            error_type, error_value, traceback_ = sys.exc_info()
+            tb_list = traceback.format_tb(traceback_)
+            self.rc_util.syslogout(error_type, syslog.LOG_ERR)
+            self.rc_util.syslogout(error_value, syslog.LOG_ERR)
+            for tb in tb_list:
+                self.rc_util.syslogout(tb, syslog.LOG_ERR)
+            msg = "Exception : MySQLdb.Error in disconnection_database()."
+            self.rc_util.syslogout(msg, syslog.LOG_ERR)
+
+            raise MySQLdb.Error
+
+    def run_lock_query(self, table_name, cursor):
+        """
+        Lock the specified table.
+        :param: table_name: Lock target table
+        :param: cursor: Operate database cursor
+
+        ### Caution ###
+        It is used in conjunction with the insert or update.
+        Commit is necessary.
+        """
+        # Query for the lock table. Output is unnecessary.
+        sql = 'SELECT * FROM %s FOR UPDATE' % (table_name)
+
+        self.rc_util.syslogout_ex("RecoveryControllerUtilDb_0024",
+                                  syslog.LOG_INFO)
+        lock_msg = 'Lock table. target: %s' % (table_name)
+        self.rc_util.syslogout(lock_msg, syslog.LOG_INFO)
+
+        self.rc_util.syslogout_ex("RecoveryControllerUtilDb_0025",
+                                  syslog.LOG_INFO)
+        self.rc_util.syslogout('SQL=' + sql, syslog.LOG_INFO)
+        conf_dict = self.rc_config.get_value('db')
+        lock_retry_max_cnt = conf_dict.get('lock_retry_max_cnt')
+        retry_cnt = 0
+        while retry_cnt < int(lock_retry_max_cnt) + 1:
+            try:
+                cursor.execute(sql)
+                break
+            except MySQLdb.OperationalError as e:
+                if e.args[0] == 1205:
+                    self.rc_util.syslogout_ex("RecoveryControllerUtilDb_0034",
+                                              syslog.LOG_INFO)
+                    error_type, error_value, traceback_ = sys.exc_info()
+                    tb_list = traceback.format_tb(traceback_)
+                    self.rc_util.syslogout(error_type, syslog.LOG_INFO)
+                    self.rc_util.syslogout(error_value, syslog.LOG_INFO)
+                    for tb in tb_list:
+                        self.rc_util.syslogout(tb, syslog.LOG_INFO)
+                    msg = 'Lock timeout detected: will retry.'
+                    self.rc_util.syslogout(msg, syslog.LOG_INFO)
+                    retry_cnt += 1
+                else:
+                    self.rc_util.syslogout_ex("RecoveryControllerUtilDb_0026",
+                                              syslog.LOG_ERR)
+                    error_type, error_value, traceback_ = sys.exc_info()
+                    tb_list = traceback.format_tb(traceback_)
+                    self.rc_util.syslogout(error_type, syslog.LOG_ERR)
+                    self.rc_util.syslogout(error_value, syslog.LOG_ERR)
+                    for tb in tb_list:
+                        self.rc_util.syslogout(tb, syslog.LOG_ERR)
+
+                    raise e
+
+            except MySQLdb.Error:
+                self.rc_util.syslogout_ex("RecoveryControllerUtilDb_0027",
+                                          syslog.LOG_ERR)
+                error_type, error_value, traceback_ = sys.exc_info()
+                tb_list = traceback.format_tb(traceback_)
+                self.rc_util.syslogout(error_type, syslog.LOG_ERR)
+                self.rc_util.syslogout(error_value, syslog.LOG_ERR)
+                for tb in tb_list:
+                    self.rc_util.syslogout(tb, syslog.LOG_ERR)
+                msg = "Exception : MySQLdb.Error in lock_table()."
+                self.rc_util.syslogout(msg, syslog.LOG_ERR)
+
+                raise MySQLdb.Error
+
+        # Retry over
+        if retry_cnt > int(lock_retry_max_cnt):
+            self.rc_util.syslogout_ex("RecoveryControllerUtilDb_0028",
+                                      syslog.LOG_ERR)
+            msg = 'Lock timeout retry count exceeded, giving up.'
+            self.rc_util.syslogout(msg, syslog.LOG_ERR)
+            raise MySQLdb.Error
+
 
 
 class RecoveryControllerUtilApi(object):
