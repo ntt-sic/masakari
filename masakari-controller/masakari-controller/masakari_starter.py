@@ -215,14 +215,17 @@ class RecoveryControllerStarter(object):
                 self.rc_util.syslogout(tb, syslog.LOG_ERR)
             raise KeyError
 
-    def add_failed_instance(self, notification_id, notification_uuid):
+    def add_failed_instance(self, notification_id,
+                            notification_uuid, retry_mode):
         """
         VM recover start thread :
             This thread starts the VM recover execution thread.
         :param notification_id: The notification ID included in the
          notification
-        :param :notification_uuid: The recovery target VM UUID of which are
+        :param notification_uuid: The recovery target VM UUID of which are
          included in the notification
+        :param retry_mode: Set True in the re-processing time of call,
+         Set the False in the normal processing time of call
         """
 
         try:
@@ -246,9 +249,27 @@ class RecoveryControllerStarter(object):
             # create semaphore (Multiplicity = 1)
             sem_recovery_instance = threading.Semaphore(1)
             # create and start thread
-            if primary_id == 0:
-                threading.Thread(target=self.rc_worker.recovery_instance, args=(
-                    notification_uuid, primary_id, sem_recovery_instance)).start()
+            if primary_id:
+                if retry_mode == True:
+                    # Skip recovery_instance.
+                    # Will delegate to handle_pending_instances
+                    self.rc_util.syslogout_ex("RecoveryControllerStarter_0027",
+                                              syslog.LOG_INFO)
+                    msg = "RETRY MODE. Skip recovery_instance thread" \
+                        + " vm_uuide=" + notification_uuid \
+                        + " notification_id=" + notification_id
+                    self.rc_util.syslogout(msg, syslog.LOG_INFO)
+                else:
+                    self.rc_util.syslogout_ex("RecoveryControllerStarter_0029",
+                                              syslog.LOG_INFO)
+                    msg = "Run thread rc_worker.recovery_instance." \
+                        + " notification_uuid=" + notification_uuid \
+                        + " primary_id=" + str(primary_id)
+                    self.rc_util.syslogout(msg, syslog.LOG_INFO)
+
+                    threading.Thread(target=self.rc_worker.recovery_instance,
+                                     args=(notification_uuid, primary_id,
+                                           sem_recovery_instance)).start()
             return
 
         except MySQLdb.Error:

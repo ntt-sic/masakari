@@ -147,6 +147,9 @@ class RecoveryController(object):
                         greenthread.sleep(int(node_err_wait))
 
                         # Start add_failed_host thread
+                        #TODO(sampath):
+                        #Avoid create thread here,
+                        #insted call rc_starter.add_failed_host
                         retry_mode = True
                         th = threading.Thread(
                             target=self.rc_starter.add_failed_host,
@@ -156,8 +159,12 @@ class RecoveryController(object):
                                   retry_mode, ))
                         th.start()
 
+
                     elif row.get("recover_by") == 1:
-                    # instance recovery event
+                        # instance recovery event
+                        #TODO(sampath):
+                        #Avoid create thread here,
+                        #insted call rc_starter.add_failed_instance
                         th = threading.Thread(
                             target=self.rc_starter.add_failed_instance,
                             args=(row.get("notification_id"), row.get(
@@ -174,6 +181,9 @@ class RecoveryController(object):
                         th.start()
 
             # Start handle_pending_instances thread
+            #TODO(sampath):
+            #Avoid create thread here,
+            #insted call rc_starter.handle_pending_instances()
             th = threading.Thread(
                 target=self.rc_starter.handle_pending_instances)
             th.start()
@@ -432,11 +442,12 @@ class RecoveryController(object):
                                 False, ))
                         th.start()
                     elif notification_list_dic.get("recover_by") == 1:
+                        retry_mode = False
                         th = threading.Thread(
                             target=self.rc_starter.add_failed_instance, args=(
                                 notification_list_dic.get("notification_id"),
                                 notification_list_dic.get(
-                                    "notification_uuid"), ))
+                                    "notification_uuid"), retry_mode, ))
                         th.start()
                     elif notification_list_dic.get("recover_by") == 2:
                         th = threading.Thread(

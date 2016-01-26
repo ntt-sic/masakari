@@ -459,8 +459,6 @@ class RecoveryControllerUtilDb(object):
                                  passwd=conf_db_dic.get("passwd"),
                                  charset=conf_db_dic.get("charset"))
 
-            log_level = conf_log_dic.get("log_level")
-
             # Execute SQL
             cursor = db.cursor(MySQLdb.cursors.DictCursor)
 
@@ -1002,40 +1000,66 @@ class RecoveryControllerUtilApi(object):
 
         return response_code, rbody
 
+    ##TODO(sampath):
+    ##Use novaclient and omit this code
+    ##For now, imported this code from current release
     def _get_x_subject_token(self, curl_response):
 
         x_subject_token = None
-        curl_response_str = str(curl_response)
-        tokenIndex_s = curl_response_str.find('X-Subject-Token') + 17
-        tokenIndex_e = curl_response_str.find('\'', tokenIndex_s)
-        x_subject_token = curl_response_str[tokenIndex_s:tokenIndex_e]
+        for line in curl_response:
+            obj = re.match("(X-Subject-Token:\s*)([\w|-]+)", line,
+                           re.IGNORECASE)
+            if obj is not None:
+                x_subject_token = obj.group(2)
+                break
 
         return x_subject_token
 
     def _get_body(self, curl_response):
         return curl_response[-1]
 
+    ##TODO(sampath):
+    ##Use novaclient and omit this code
+    ##For now, imported this code from current release
     def _exe_curl(self, curl):
 
-        p = subprocess.Popen(curl,
-                             shell=True,
-                             cwd='./',
-                             stdout=subprocess.PIPE,
-                             stderr=subprocess.PIPE)
+        conf_dic = self.rc_config.get_value('recover_starter')
+        api_max_retry_cnt = conf_dic.get('api_max_retry_cnt')
+        api_retry_interval = conf_dic.get('api_retry_interval')
 
-        out, err = p.communicate()
+        for cnt in range(0, int(api_max_retry_cnt) + 1):
+            line_list = []
+            p = subprocess.Popen(curl,
+                                 shell=True,
+                                 cwd='./',
+                                 stdout=subprocess.PIPE,
+                                 stderr=subprocess.PIPE)
 
-        self.rc_util.syslogout_ex("RecoveryControllerUtilApi_0008",
-                                  syslog.LOG_INFO)
-        self.rc_util.syslogout("curl request:" + curl, syslog.LOG_INFO)
-        self.rc_util.syslogout("curl response:" + out, syslog.LOG_INFO)
+            out, err = p.communicate()
+            rc = p.returncode
 
-        # Only last respons.
-        s_body_pos = out.rfind('\n\n')
-        s_head_pos = out[:s_body_pos].rfind('HTTP')
-        out = out[s_head_pos:]
+            self.rc_util.syslogout_ex("RecoveryControllerUtilApi_0008",
+                                      syslog.LOG_INFO)
+            self.rc_util.syslogout("curl request:" + curl, syslog.LOG_INFO)
+            self.rc_util.syslogout("curl response:" + out, syslog.LOG_INFO)
+            self.rc_util.syslogout("curl return code:" + str(rc),
+                                   syslog.LOG_INFO)
 
-        return out.splitlines()
+            if rc == 0:
+                line_list = out.splitlines()
+                # If HTTP status code is 5xx, do retry.
+                if re.match("HTTP/1.\d 5\d\d ", line_list[0]) is not None:
+                    greenthread.sleep(int(api_retry_interval))
+                    continue
+                break
+            # If curl response code is error, do retry.
+            elif rc == 28 or rc == 52 or rc == 55 or rc == 56 or rc == 89:
+                greenthread.sleep(int(api_retry_interval))
+                continue
+            else:
+                break
+
+        return line_list
 
     def _nova_curl_client(self,
                           nova_curl_method=None,
@@ -1093,37 +1117,60 @@ class RecoveryControllerUtilApi(object):
         if project_name is None:
             project_name = optinal_arg.get("project_name")
 
-        # I get a token of admin.
-        nova_client_url, token, project_id, response_code \
-            = self._get_token_admin(auth_url,
-                                    domain,
-                                    admin_user,
-                                    admin_password,
-                                    project_name)
+        api_max_retry_cnt = int(self.rc_config.get_value(
+            "recover_starter").get("api_max_retry_cnt"))
+        api_retry_cnt_get_detail = 0
+        api_retry_cnt_exec_api = 0
 
-        # Get the admintoken by the project (tenant_id) in scope in the case of
-        # non-GET
-        if nova_curl_method != "GET":
+        while api_retry_cnt_get_detail <= api_max_retry_cnt and \
+                api_retry_cnt_exec_api <= api_max_retry_cnt:
 
-            nova_client_url, response_code, rbody \
-                = self._get_detail(nova_client_url,
-                                   nova_variable_url,
-                                   token)
-
+            # I get a token of admin.
             nova_client_url, token, project_id, response_code \
-                = self._get_token_project_scope(auth_url,
-                                                domain,
-                                                admin_user,
-                                                admin_password,
-                                                project_id)
+                = self._get_token_admin(auth_url,
+                                        domain,
+                                        admin_user,
+                                        admin_password,
+                                        project_name)
 
-        # Run the Objective curl
-        response_code, rbody \
-            = self._run_curl_objective(nova_curl_method,
-                                       nova_client_url,
+            # Get the admintoken by the project_id in scope in the case of
+            # non-GET
+            if nova_curl_method != "GET":
+                nova_client_url, response_code, rbody \
+                    = self._get_detail(nova_client_url,
                                        nova_variable_url,
-                                       nova_body,
                                        token)
+
+                # The re-implementation in the case of authentication error
+                if response_code == "401":
+                    api_retry_cnt_get_detail += 1
+                    if api_retry_cnt_get_detail > api_max_retry_cnt:
+                        error_msg = "detail acquisition failure"
+                        raise Exception(error_msg)
+                    else:
+                        continue
+
+                nova_client_url, token, project_id, response_code \
+                    = self._get_token_project_scope(auth_url,
+                                                    domain,
+                                                    admin_user,
+                                                    admin_password,
+                                                    project_id)
+
+            # Run the Objective curl
+            response_code, rbody \
+                = self._run_curl_objective(nova_curl_method,
+                                           nova_client_url,
+                                           nova_variable_url,
+                                           nova_body,
+                                           token)
+
+            # The re-implementation in the case of authentication error
+            if response_code == "401":
+                api_retry_cnt_exec_api += 1
+                api_retry_cnt_get_detail = 0
+            else:
+                break
 
         return response_code, rbody
 
@@ -1147,14 +1194,10 @@ class RecoveryControllerUtilApi(object):
                      % (domain, admin_user, admin_password, domain,
                         project_name)
 
-        conf_dic = self.rc_config.get_value('recover_starter')
-        api_max_retry_cnt = conf_dic.get('api_max_retry_cnt')
-        api_retry_interval = conf_dic.get('api_retry_interval')
-
-        token_curl = "curl --retry %s --retry-delay %s " \
+        token_curl = "curl " \
                      "-i '%s' -X POST -H \"Accept: application/json\" " \
                      "-H \"Content-Type: application/json\" -d '%s'" \
-                     % (api_max_retry_cnt, api_retry_interval, token_url,
+                     % (token_url,
                         token_body)
 
         # Get token id.
@@ -1169,9 +1212,7 @@ class RecoveryControllerUtilApi(object):
         # Token acquisition
         token = self._get_x_subject_token(token_get_res)
 
-        for line in token_get_res:
-            if line.find("HTTP") == 0:
-                response_code = line.split(" ")[1]
+        response_code = token_get_res[0].split(" ")[1]
 
         if response_code != "201":
 
@@ -1181,7 +1222,6 @@ class RecoveryControllerUtilApi(object):
             raise Exception("token acquisition failure")
 
         # Response body acquisition
-        token_res_body = self._get_body(token_get_res)
         res_json = json.loads(token_get_res[-1])
         project_id = res_json.get("token").get("project").get("id")
 
@@ -1198,6 +1238,7 @@ class RecoveryControllerUtilApi(object):
 
         return nova_client_url, token, project_id, response_code
 
+
     def _get_detail(self,
                     nova_client_url,
                     nova_variable_url,
@@ -1210,17 +1251,12 @@ class RecoveryControllerUtilApi(object):
         if nova_variable_url is not None:
             nova_client_url = "%s%s" % (nova_client_url, "/servers/detail")
 
-        conf_dic = self.rc_config.get_value('recover_starter')
-        api_max_retry_cnt = conf_dic.get('api_max_retry_cnt')
-        api_retry_interval = conf_dic.get('api_retry_interval')
-
-        nova_client_curl = "curl --retry %s --retry-delay %s " \
+        nova_client_curl = "curl " \
                            "-i \"%s\" -X GET " \
                            "-H \"Accept: application/json\" " \
                            "-H \"Content-Type: application/json\" " \
                            "-H \"X-Auth-Token: %s\"" \
-                           % (api_max_retry_cnt, api_retry_interval,
-                              nova_client_url, token)
+                           % (nova_client_url, token)
         nova_exe_res = self._exe_curl(nova_client_curl)
 
         if len(nova_exe_res) == 0:
@@ -1229,11 +1265,9 @@ class RecoveryControllerUtilApi(object):
             self.rc_util.syslogout("exec curl command failure", syslog.LOG_ERR)
             raise Exception("exec curl command failure")
 
-        for line in nova_exe_res:
-            if line.find("HTTP") == 0:
-                response_code = line.split(" ")[1]
+        response_code = nova_exe_res[0].split(" ")[1]
 
-        if response_code != "200":
+        if response_code != "200" and response_code != "401":
             self.rc_util.syslogout_ex("RecoveryControllerUtilApi_0011",
                                       syslog.LOG_ERR)
             self.rc_util.syslogout("detail acquisition failure",
@@ -1241,15 +1275,7 @@ class RecoveryControllerUtilApi(object):
             raise Exception("detail acquisition failure")
         else:
             try:
-                for line in nova_exe_res:
-                    if "Content-Length" in line:
-                        length = line.split(" ")[-1]
-
-                        if length != "0":
-                            rbody = self._get_body(nova_exe_res)
-
-                        else:
-                            raise Exception("Is not enough response body.")
+                rbody = self._get_body(nova_exe_res)
 
             except Exception, e:
 
@@ -1285,15 +1311,10 @@ class RecoveryControllerUtilApi(object):
                      "{ \"id\": \"%s\"} } } }" \
                      % (domain, admin_user, admin_password, project_id)
 
-        conf_dic = self.rc_config.get_value('recover_starter')
-        api_max_retry_cnt = conf_dic.get('api_max_retry_cnt')
-        api_retry_interval = conf_dic.get('api_retry_interval')
-
-        token_curl = "curl --retry %s --retry-delay %s " \
+        token_curl = "curl " \
                      "-i '%s' -X POST -H \"Accept: application/json\" " \
                      "-H \"Content-Type: application/json\" -d '%s'" \
-                     % (api_max_retry_cnt, api_retry_interval,
-                        token_url, token_body)
+                     % (token_url, token_body)
 
         # Get token id.
         token_get_res = self._exe_curl(token_curl)
@@ -1304,9 +1325,7 @@ class RecoveryControllerUtilApi(object):
             self.rc_util.syslogout("exec curl command failure", syslog.LOG_ERR)
             raise Exception("exec curl command failure")
 
-        for line in token_get_res:
-            if line.find("HTTP") == 0:
-                response_code = line.split(" ")[1]
+        response_code = token_get_res[0].split(" ")[1]
 
         if response_code != "201":
             self.rc_util.syslogout_ex("RecoveryControllerUtilApi_0013",
@@ -1316,9 +1335,6 @@ class RecoveryControllerUtilApi(object):
 
         # Token acquisition
         token = self._get_x_subject_token(token_get_res)
-
-        # Response body acquisition
-        token_res_body = self._get_body(token_get_res)
 
         res_json = json.loads(token_get_res[-1])
 
@@ -1350,15 +1366,10 @@ class RecoveryControllerUtilApi(object):
         if nova_variable_url is not None:
             nova_client_url = "%s%s" % (nova_client_url, nova_variable_url)
 
-        conf_dic = self.rc_config.get_value('recover_starter')
-        api_max_retry_cnt = conf_dic.get('api_max_retry_cnt')
-        api_retry_interval = conf_dic.get('api_retry_interval')
-
-        nova_client_curl = "curl --retry %s --retry-delay %s " \
+        nova_client_curl = "curl " \
                            "-i \"%s\" -X %s -H \"Content-Type: " \
                            "application/json\" -H \"X-Auth-Token: %s\"" \
-                           % (api_max_retry_cnt, api_retry_interval,
-                              nova_client_url, nova_curl_method, token)
+                           % (nova_client_url, nova_curl_method, token)
 
         if nova_body is not None:
             nova_client_curl = "%s -d '%s'" % (nova_client_curl, nova_body)
@@ -1371,9 +1382,7 @@ class RecoveryControllerUtilApi(object):
             self.rc_util.syslogout("exec curl command failure", syslog.LOG_ERR)
             raise Exception("exec curl command failure")
 
-        for line in nova_exe_res:
-            if line.find("HTTP") == 0:
-                response_code = line.split(" ")[1]
+        response_code = nova_exe_res[0].split(" ")[1]
 
         if response_code != "200" and response_code != "202":
             self.rc_util.syslogout_ex("RecoveryControllerUtilApi_0014",
@@ -1381,13 +1390,7 @@ class RecoveryControllerUtilApi(object):
             self.rc_util.syslogout("exec curl command failure", syslog.LOG_ERR)
 
         try:
-            for line in nova_exe_res:
-                if "Content-Length" in line:
-                    length = line.split(" ")[-1]
             rbody = self._get_body(nova_exe_res)
-
-            if len(rbody) != int(length):
-                raise Exception("Bad response body.")
 
         except Exception, e:
 
@@ -1421,22 +1424,23 @@ class RecoveryControllerUtil(object):
         :msgid : Log output message ID(Monitoring message)
         :logOutLevel: Log output level
         """
-
-        monitoring_message = "--MonitoringMessage--ID:[%s]" % (msgid)
+        monitoring_message = str(threading.current_thread())\
+                           + " --MonitoringMessage--ID:[%s]" % (msgid)
         self.syslogout(monitoring_message, logOutLevel)
 
-    def syslogout(self, msg, logOutLevel):
+
+    def syslogout(self, rawmsg, logOutLevel):
         """
         I output the log to a given log file
         :msg : Log output messages
         :logOutLevel: Log output level
         """
+        msg = str(threading.current_thread()) + " " + str(rawmsg)
 
         config_log_dic = self.rc_config.get_value('log')
         logLevel = config_log_dic.get("log_level")
 
         # Output log
-        arg0 = os.path.basename(sys.argv[0])
         host = socket.gethostname()
 
         logger = logging.getLogger()
@@ -1458,10 +1462,11 @@ class RecoveryControllerUtil(object):
 
         logger.setLevel(wk_setLevel)
         f = "%(asctime)s " + host + \
-            " masakari(%(process)d): %(levelname)s: %(message)s'"
+            " masakari-controller(%(process)d): %(levelname)s: %(message)s'"
         formatter = logging.Formatter(fmt=f, datefmt='%b %d %H:%M:%S')
         fh = logging.FileHandler(
             filename='/var/log/masakari/masakari-controller.log')
+
         fh.setLevel(wk_setLevel)
         fh.setFormatter(formatter)
         logger.addHandler(fh)
