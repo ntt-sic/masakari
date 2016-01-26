@@ -442,7 +442,7 @@ class RecoveryControllerUtilDb(object):
 
             raise MySQLdb.Error
 
-    def update_vm_list_db(self, key, value, uuid):
+    def update_vm_list_db(self, key, value, primary_id):
         """
         VM list table update
         :param :key: Update column name
@@ -452,7 +452,6 @@ class RecoveryControllerUtilDb(object):
 
         try:
             conf_db_dic = self.rc_config.get_value('db')
-            conf_log_dic = self.rc_config.get_value('log')
             # Connect db
             db = MySQLdb.connect(host=conf_db_dic.get("host"),
                                  db=conf_db_dic.get("name"),
@@ -465,40 +464,32 @@ class RecoveryControllerUtilDb(object):
             # Execute SQL
             cursor = db.cursor(MySQLdb.cursors.DictCursor)
 
-            sql = "SELECT id FROM vm_list " \
-                  "WHERE uuid = '%s' ORDER BY create_at DESC LIMIT 1" \
-                  % (uuid)
-
-            cursor.execute(sql)
-            result = cursor.fetchone()
-            result_id = result.get('id')
-
-            sql = (("UPDATE vm_list SET %s = %s WHERE id = '%s'")
-                   % (key,
-                      value,
-                      result_id))
-
-            self.rc_util.syslogout_ex("RecoveryControllerUtilDb_0015",
-                                      syslog.LOG_INFO)
-            self.rc_util.syslogout("SQL=" + sql, syslog.LOG_INFO)
-
+            # Set autocommit True
+            sql = "SET SESSION autocommit = 1"
             cursor.execute(sql)
 
-            if key == "progress" and value == 2:
-                sql = (("UPDATE vm_list SET delete_at = '%s' WHERE id = '%s'")
-                       % (datetime.datetime.now(), result_id))
+            # Updated progress to start
+            now = datetime.datetime.now()
+            if key == 'progress' and value == 1:
+                sql = "UPDATE vm_list " \
+                      "SET progress = %s, update_at = '%s' " \
+                      "WHERE id = '%s'" \
+                      % (value, now, primary_id)
+            # End the progress([success:2][error:3][skipped old:4])
+            elif key == 'progress':
+                sql = "UPDATE vm_list " \
+                      "SET progress = %s, " \
+                      "update_at = '%s', delete_at = '%s' " \
+                      "WHERE id = '%s'" \
+                      % (value, now, now, primary_id)
+            # Update than progress
             else:
-                sql = (("UPDATE vm_list SET update_at = '%s' WHERE id = '%s'")
-                       % (datetime.datetime.now(), result_id))
-
-            self.rc_util.syslogout_ex("RecoveryControllerUtilDb_0016",
-                                      syslog.LOG_INFO)
-            self.rc_util.syslogout("SQL=" + sql, syslog.LOG_INFO)
+                sql = "UPDATE vm_list SET %s = '%s' WHERE id = '%s'" \
+                      % (key, value, primary_id)
 
             cursor.execute(sql)
 
             db.commit()
-
             # db connection close
             cursor.close()
             db.close()
@@ -830,11 +821,12 @@ class RecoveryControllerUtilApi(object):
 
         return response_code, rbody
 
-    def do_instance_reset(self, uuid):
+    def do_instance_reset(self, uuid, status):
         """
         API-reset. Edit the body of the curl
         is performed using the nova client.
         :uuid : Instance id to be used in nova cliant curl.
+        :status :Status that you specify for the API.
         :return :response_code :response code
         :return :rbody :response body(json)
         """
@@ -845,7 +837,7 @@ class RecoveryControllerUtilApi(object):
             # Set nova_variable_url
             nova_variable_url = "/servers/" + uuid + "/action"
             # Set nova_body
-            nova_body = "{\"os-resetState\":{\"state\":\"error\"}}"
+            nova_body = "{\"os-resetState\":{\"state\":\"" + status + "\"}}"
 
             response_code, rbody = self._nova_curl_client(nova_curl_method,
                                                           nova_variable_url,

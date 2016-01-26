@@ -248,7 +248,7 @@ class RecoveryControllerStarter(object):
             # create and start thread
             if primary_id == 0:
                 threading.Thread(target=self.rc_worker.recovery_instance, args=(
-                    notification_uuid, sem_recovery_instance)).start()
+                    notification_uuid, primary_id, sem_recovery_instance)).start()
             return
 
         except MySQLdb.Error:
@@ -417,10 +417,10 @@ class RecoveryControllerStarter(object):
                 incomplete_list = []
 
                 for vm_uuid in vm_list:
-                    ret = self._create_vm_list_db_for_failed_host(
+                    primary_id = self._create_vm_list_db_for_failed_host(
                         notification_id, vm_uuid)
 
-                    if ret:
+                    if primary_id:
                         if retry_mode == True:
                             # Skip recovery_instance thread. Will delegate to ...
                             msg = "RETRY MODE. Skip recovery_instance thread" \
