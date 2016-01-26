@@ -11,10 +11,10 @@ rescues a KVM-based Virtual Machine(VM) from a failure events of the following:
 Try [masakari-deploy](https://github.com/ntt-sic/masakari-deploy) for all-in-one scripts to deploy it on your laptop.
 
 ## Architecture
-* masakari : controller process for failure notification
-* instancemonitor : detects the VMs process down
-* processmonitor  : detects the fatal control process down on nova-compute node
-* hostmonitor     : detects the compute host failure
+* masakari-controller : controller process for failure notification
+* masakari-instancemonitor : detects the VMs process down
+* masakari-processmonitor  : detects the fatal control process down on nova-compute node
+* masakari-hostmonitor     : detects the compute host failure
 
 ![Alt text](contents/architecture.png)
 
@@ -49,7 +49,7 @@ ex) Ubuntu
 
 create database and tables for masakari
 
-    # cd masakari/db
+    # cd masakari-controller/db
     # vi db.conf
     DB_USER=<mysql user>
     DB_PASSWORD=<mysql user password>
@@ -58,9 +58,9 @@ create database and tables for masakari
 
 ### config setting
 
-#### masakari.conf
+#### masakari-controller.conf
 
-    # vi /etc/masakari/masakari.conf
+    # vi /etc/masakari/masakari-controller.conf
     ...
     [db]
     host = <mysql host ip>
@@ -77,9 +77,9 @@ create database and tables for masakari
     project_name = <tenant name>
     ...
 
-#### instancemonitor.conf
+#### masakari-instancemonitor.conf
 
-    # vi /etc/instancemonitor/instancemonitor.conf
+    # vi /etc/masakari/masakari-instancemonitor.conf
     [callback]
     # Event notification destination URL
     url = http://<masakari server ip>:15868
@@ -88,9 +88,9 @@ create database and tables for masakari
     regionID=<openstack region name. ex) RegionOne >
     ...
 
-#### hostmonitor.conf
+#### masakari-hostmonitor.conf
 
-    # vi /etc/hostmonitor/hostmonitor.conf
+    # vi /etc/masakari/masakari-hostmonitor.conf
     # URL of recovery controller
     RM_URL="http://<masakari server ip>:15868"
     ...
@@ -98,9 +98,9 @@ create database and tables for masakari
     # This item is necessary
     REGION_ID="<openstack region name ex) RegionOne>"
 
-#### processmonitor.conf
+#### masakari-processmonitor.conf
 
-    # vi /etc/processmonitor/processmonitor.conf
+    # vi /etc/masakari/masakari-processmonitor.conf
     RESOURCE_MANAGER_URL="http://<masakari server ip>:15868"
     ...
     REGION_ID=<openstack region name. ex) RegionOne >

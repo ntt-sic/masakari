@@ -19,10 +19,10 @@
 # Source function library.
 . /lib/lsb/init-functions
 
-PROGNAME=instancemonitor
-PROG_DIR=/opt/instancemonitor
-PROG=$PROG_DIR/instancemonitor.py
-PIDFILE=/var/run/instancemonitor.pid
+PROGNAME=masakari
+PROG_DIR=/opt/masakari
+PROG=$PROG_DIR/masakari-controller/masakari_controller.py
+PIDFILE=/var/run/masakari-controller.pid
 PYTHON=/usr/bin/python
 USER=openstack
 
@@ -70,3 +70,4 @@ case "$1" in
 esac
 
 exit 0
+

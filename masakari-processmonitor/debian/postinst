@@ -1,11 +1,11 @@
-#! /bin/sh
+#!/bin/sh
 set -e 
-ucf /etc/processmonitor/processmonitor.conf.sample /etc/processmonitor/processmonitor.conf
-ucf /etc/processmonitor/proc.list.sample /etc/processmonitor/proc.list
-dpkg-statoverride --update --add openstack openstack 0755 /var/log/processmonitor
-dpkg-statoverride --update --add openstack openstack 0755 /etc/processmonitor
-dpkg-statoverride --update --add openstack openstack 0755 /opt/processmonitor/common.sh
-dpkg-statoverride --update --add openstack openstack 0755 /opt/processmonitor/nova_compute_reboot_before.sh
-dpkg-statoverride --update --add openstack openstack 0755 /opt/processmonitor/process_status_checker.sh
-dpkg-statoverride --update --add openstack openstack 0755 /opt/processmonitor/processmonitor.sh
+ucf /etc/masakari/masakari-processmonitor.conf.sample /etc/masakari/masakari-processmonitor.conf
+ucf /etc/masakari/proc.list.sample /etc/masakari/proc.list
+LOG_DIR=/var/log/masakari
+if [ -z "`dpkg-statoverride --list ${LOG_DIR}`" ] ; then dpkg-statoverride --update --add openstack openstack 0755 ${LOG_DIR}; fi
+dpkg-statoverride --update --add openstack openstack 0755 /opt/masakari/masakari-processmonitor/common.sh
+dpkg-statoverride --update --add openstack openstack 0755 /opt/masakari/masakari-processmonitor/nova_compute_reboot_before.sh
+dpkg-statoverride --update --add openstack openstack 0755 /opt/masakari/masakari-processmonitor/process_status_checker.sh
+dpkg-statoverride --update --add openstack openstack 0755 /opt/masakari/masakari-processmonitor/masakari-processmonitor.sh
 exit 0

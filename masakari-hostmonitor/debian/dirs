@@ -1,1 +1,3 @@
-/var/log/hostmonitor
+var/log/masakari
+opt/masakari
+etc/masakari

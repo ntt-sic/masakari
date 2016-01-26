@@ -26,11 +26,11 @@ import libvirt_eventfilter as evf
 ###################################################
 if os.path.dirname(__file__):           # load by import
     dir_path=os.path.dirname(__file__)
-    CONFIG_FILE='/etc/instancemonitor/instancemonitor.conf'  # Callback configuration file
+    CONFIG_FILE='/etc/masakari/masakari-instancemonitor.conf'  # Callback configuration file
     #LOG_FILENAME=dir_path+'/eventCallback.log'  # Log output destination
     LOG_FILENAME=''                     # If the log is not output
 else:                                   # load as main (debug)
-    CONFIG_FILE='/etc/instancemonitor/instancemonitor.conf'  # Callback configuration file
+    CONFIG_FILE='/etc/masakari/masakari-instancemonitor.conf'  # Callback configuration file
     LOG_FILENAME='./eventCallback.log'  # Log output destination
 
 callback_config={}                          # Area that holds the set of callback

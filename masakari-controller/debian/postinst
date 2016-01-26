@@ -1,0 +1,11 @@
+#! /bin/sh
+set -e 
+ucf /etc/masakari/masakari-controller.conf.sample /etc/masakari/masakari-controller.conf
+LOG_DIR=/var/log/masakari
+if [ -z "`dpkg-statoverride --list ${LOG_DIR}`" ] ; then dpkg-statoverride --update --add openstack openstack 0755 ${LOG_DIR} ; fi
+dpkg-statoverride --update --add openstack openstack 0755 /opt/masakari/masakari-controller/masakari_controller.py
+dpkg-statoverride --update --add openstack openstack 0644 /opt/masakari/masakari-controller/masakari_config.py
+dpkg-statoverride --update --add openstack openstack 0644 /opt/masakari/masakari-controller/masakari_starter.py
+dpkg-statoverride --update --add openstack openstack 0644 /opt/masakari/masakari-controller/masakari_util.py
+dpkg-statoverride --update --add openstack openstack 0644 /opt/masakari/masakari-controller/masakari_worker.py
+exit 0

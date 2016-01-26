@@ -1,4 +1,4 @@
-Source: hostmonitor
+Source: masakari-hostmonitor
 Section: unknown
 Priority: extra
 Maintainer: NTT Software Innovation Center <openstack@lab.ntt.co.jp>
@@ -6,7 +6,7 @@ Build-Depends: debhelper (>= 8.0.0)
 Standards-Version: 3.9.2
 Homepage: https://github.com/ntt-sic/masakari
 
-Package: hostmonitor
+Package: masakari-hostmonitor
 Architecture: all
 Depends: ${shlibs:Depends}, ${misc:Depends}
 Description: <insert up to 60 chars description>

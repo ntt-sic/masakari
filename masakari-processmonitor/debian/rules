@@ -21,7 +21,7 @@ install: build
 	dh_testdir
 	dh_testroot
 	dh_clean
-	dh_installdirs -i
+	dh_installdirs -i -A
 
 # Build architecture-independent files here.
 binary-indep: build install
@@ -32,7 +32,7 @@ binary-indep: build install
 	dh_installdocs -i
 	dh_installdebconf -n
 	dh_install -i --sourcedir=.
-	dh_link /lib/init/upstart-job etc/init.d/processmonitor
+	dh_link /lib/init/upstart-job etc/init.d/masakari-processmonitor
 	dh_compress  -i
 	dh_fixperms -i
 	dh_shlibdeps -i

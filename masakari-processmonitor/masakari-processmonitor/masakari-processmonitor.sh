@@ -23,15 +23,13 @@ TMP_CRMADM_FILE="$TMP_DIR/crmadmin.tmp"
 NOTICE_OUTPUT="$TMP_DIR/${BASE_NAME}_resp.out"
 JSON_DIR="$TMP_DIR/tmp_json_files"
 
-SCRIPT_DIR="/opt/processmonitor"
-SCRIPT_CONF_FILE="/etc/processmonitor/processmonitor.conf"
+SCRIPT_DIR="/opt/masakari/masakari-processmonitor"
+SCRIPT_CONF_FILE="/etc/masakari/masakari-processmonitor.conf"
 SCRIPT_CHECK_PROCESS="$SCRIPT_DIR/process_status_checker.sh"
 SCRIPT_COMMON_SH="$SCRIPT_DIR/common.sh"
 
-#DOWN_PROCESS_LIST="$SCRIPT_DIR/badproc.list"
-#PROC_LIST="$SCRIPT_DIR/proc.list"
-DOWN_PROCESS_LIST="/etc/processmonitor/badproc.list"
-PROC_LIST="/etc/processmonitor/proc.list"
+DOWN_PROCESS_LIST="$TMP_DIR/badproc.list"
+PROC_LIST="/etc/masakari/proc.list"
 
 RESOURCE_MANAGER_SEND_PROGRAM=curl
 RESOURCE_MANAGER_SEND_FAIL_FLG="off"

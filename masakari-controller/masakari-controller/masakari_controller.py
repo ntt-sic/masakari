@@ -77,7 +77,7 @@ class RecoveryController(object):
                 " masakari(%(process)d): %(levelname)s: %(message)s'"
             formatter = logging.Formatter(fmt=f, datefmt='%b %d %H:%M:%S')
             fh = logging.FileHandler(
-                filename='/var/log/masakari/masakari.log')
+                filename='/var/log/masakari/masakari-controller.log')
             fh.setLevel(logging.ERROR)
             fh.setFormatter(formatter)
             logger.addHandler(fh)
