@@ -78,7 +78,7 @@ class notification_status_manage(object):
                  subprocess.call(sysout_sql, shell=True)
 
         except:
-            msg = "rnotification status manage execution failure"
+            msg = "notification status manage execution failure"
             print msg
 
         finally:
