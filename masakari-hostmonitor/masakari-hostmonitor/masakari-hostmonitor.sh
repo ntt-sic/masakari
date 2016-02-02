@@ -37,19 +37,6 @@ HA_CONF="/etc/corosync/corosync.conf"
 LOGDIR="/var/log/masakari"
 LOGFILE="${LOGDIR}/masakari-hostmonitor.log"
 
-# Define the default settings.
-DEFAULT_MONITOR_INTERVAL=60
-DEFAULT_NOTICE_TIMEOUT=10
-DEFAULT_NOTICE_RETRY_COUNT=12
-DEFAULT_NOTICE_RETRY_INTERVAL=10
-DEFAULT_NOTICE_RETRY_TIMEOUT=120
-DEFAULT_STONITH_WAIT=30
-DEFAULT_MAX_CHILD_PROCESS=3
-DEFAULT_TCPDUMP_TIMEOUT=10
-DEFAULT_IPMI_TIMEOUT=5
-DEFAULT_IPMI_RETRY_MAX=3
-DEFAULT_IPMI_RETRY_INTERVAL=10
-
 # Define the node state.
 NODE_STATUS_STARTED="Started"
 NODE_STATUS_STOPPED="Stopped"
@@ -153,6 +140,42 @@ script_finalize () {
     return 0
 }
 
+# Check the value is correct type
+# Argument
+#   $1: Value
+#   $2: Type
+#   $3: Parameter Name
+# Return
+#   0: The value is correct type
+#   1: The value is not correct type
+check_config_type() {
+    expected_type=$1
+    parameter_name=$2
+    value=$3
+
+    ret=0
+    case $expected_type in
+        int)
+            expr $value + 1 > /dev/null 2>&1
+            if [ $? -ge 2 ]; then ret=1; fi
+            ;;
+        string)
+            if [ -z $value ] ; then ret=1; fi
+            ;;
+        *)
+            ret=1
+            ;;
+    esac
+
+    if [ $ret -eq 1 ] ; then
+        log_info "config file parameter error. [${SCRIPT_CONF_FILE}:${parameter_name}]"
+        exit 1
+    fi
+
+    log_info "config file parameter : ${parameter_name}=${value}"
+    return 0
+}
+
 # This function reads the configuration file and set the value.
 # If the value is omitted, set the default value.
 # If invalid value is set, return 1.
@@ -180,132 +203,44 @@ set_conf_value () {
         return 1
     fi
 
-    # If the MONITOR_INTERVAL is omitted, set the default value.
-    # If invalid value was detected, return 1.
-    expect_empty=`echo -n $MONITOR_INTERVAL | sed 's/[0-9]//g'`
-    if [ "x" = "x${MONITOR_INTERVAL}" ]; then
-        MONITOR_INTERVAL=$DEFAULT_MONITOR_INTERVAL
-    elif [ "x" != "x${expect_empty}" ]; then
-        log_info "config file parameter error. [$SCRIPT_CONF_FILE:MONITOR_INTERVAL]"
-        return 1
-    fi
-    log_debug "config file parameter : MONITOR_INTERVAL=$MONITOR_INTERVAL"
+    MONITOR_INTERVAL=${MONITOR_INTERVAL:-60}
+    check_config_type 'int' MONITOR_INTERVAL $MONITOR_INTERVAL
 
-    # If the NOTICE_TIMEOUT is omitted, set the default value.
-    # If invalid value was detected, return 1.
-    expect_empty=`echo -n $NOTICE_TIMEOUT | sed 's/[0-9]//g'`
-    if [ "x" = "x${NOTICE_TIMEOUT}" ]; then
-        NOTICE_TIMEOUT=$DEFAULT_NOTICE_TIMEOUT
-    elif [ "x" != "x${expect_empty}" ]; then
-        log_info "config file parameter error. [$SCRIPT_CONF_FILE:NOTICE_TIMEOUT]"
-        return 1
-    fi
-    log_debug "config file parameter : NOTICE_TIMEOUT=$NOTICE_TIMEOUT"
+    NOTICE_TIMEOUT=${NOTICE_TIMEOUT:-10}
+    check_config_type 'int' NOTICE_TIMEOUT $NOTICE_TIMEOUT
 
-    # If the NOTICE_RETRY_COUNT is omitted, set the default value.
-    # If invalid value was detected, return 1.
-    expect_empty=`echo -n $NOTICE_RETRY_COUNT | sed 's/[0-9]//g'`
-    if [ "x" = "x${NOTICE_RETRY_COUNT}" ]; then
-        NOTICE_RETRY_COUNT=$DEFAULT_NOTICE_RETRY_COUNT
-    elif [ "x" != "x${expect_empty}" ]; then
-        log_info "config file parameter error. [$SCRIPT_CONF_FILE:NOTICE_RETRY_COUNT]"
-        return 1
-    fi
-    log_debug "config file parameter : NOTICE_RETRY_COUNT=$NOTICE_RETRY_COUNT"
+    NOTICE_RETRY_COUNT=${NOTICE_RETRY_COUNT:-12}
+    check_config_type 'int' NOTICE_RETRY_COUNT $NOTICE_RETRY_COUNT
 
-    # If the NOTICE_RETRY_INTERVAL is omitted, set the default value.
-    # If invalid value was detected, return 1.
-    expect_empty=`echo -n $NOTICE_RETRY_INTERVAL | sed 's/[0-9]//g'`
-    if [ "x" = "x${NOTICE_RETRY_INTERVAL}" ]; then
-        NOTICE_RETRY_INTERVAL=$DEFAULT_NOTICE_RETRY_INTERVAL
-    elif [ "x" != "x${expect_empty}" ]; then
-        log_info "config file parameter error. [$SCRIPT_CONF_FILE:NOTICE_RETRY_INTERVAL]"
-        return 1
-    fi
-    log_debug "config file parameter : NOTICE_RETRY_INTERVAL=$NOTICE_RETRY_INTERVAL"
+    NOTICE_RETRY_INTERVAL=${NOTICE_RETRY_INTERVAL:-10}
+    check_config_type 'int' NOTICE_RETRY_INTERVAL $NOTICE_RETRY_INTERVAL
 
-    # If the NOTICE_RETRY_TIMEOUT is omitted, set the default value.
-    # If invalid value was detected, return 1.
-    expect_empty=`echo -n $NOTICE_RETRY_TIMEOUT | sed 's/[0-9]//g'`
-    if [ "x" = "x${NOTICE_RETRY_TIMEOUT}" ]; then
-        NOTICE_RETRY_TIMEOUT=$DEFAULT_NOTICE_RETRY_TIMEOUT
-    elif [ "x" != "x${expect_empty}" ]; then
-        log_info "config file parameter error. [$SCRIPT_CONF_FILE:NOTICE_RETRY_TIMEOUT]"
-        return 1
-    fi
+    NOTICE_RETRY_TIMEOUT=${NOTICE_RETRY_TIMEOUT:-120}
+    check_config_type 'int' NOTICE_RETRY_TIMEOUT $NOTICE_RETRY_TIMEOUT
 
-    # If the STONITH_WAIT is omitted, set the default value.
-    # If invalid value was detected, return 1.
-    expect_empty=`echo -n $STONITH_WAIT | sed 's/[0-9]//g'`
-    if [ "x" = "x${STONITH_WAIT}" ]; then
-        STONITH_WAIT=$DEFAULT_STONITH_WAIT
-    elif [ "x" != "x${expect_empty}" ]; then
-        log_info "config file parameter error. [$SCRIPT_CONF_FILE:STONITH_WAIT]"
-        return 1
-    fi
-    log_debug "config file parameter : STONITH_WAIT=$STONITH_WAIT"
+    STONITH_WAIT=${STONITH_WAIT:-30}
+    check_config_type 'int' STONITH_WAIT $STONITH_WAIT
 
-    # If the MAX_CHILD_PROCESS is omitted, set the default value.
-    # If invalid value was detected, return 1.
-    expect_empty=`echo -n $MAX_CHILD_PROCESS | sed 's/[0-9]//g'`
-    if [ "x" = "x${MAX_CHILD_PROCESS}" ]; then
-        MAX_CHILD_PROCESS=$DEFAULT_MAX_CHILD_PROCESS
-    elif [ "x" != "x${expect_empty}" ] || [ $MAX_CHILD_PROCESS -eq 0 ]; then
-        log_info "config file parameter error. [$SCRIPT_CONF_FILE:MAX_CHILD_PROCESS]"
-        return 1
-    fi
-    log_debug "config file parameter : MAX_CHILD_PROCESS=$MAX_CHILD_PROCESS"
+    MAX_CHILD_PROCESS=${MAX_CHILD_PROCESS:-3}
+    check_config_type 'int' MAX_CHILD_PROCESS $MAX_CHILD_PROCESS
 
-    # If the TCPDUMP_TIMEOUT is omitted, set the default value.
-    # If invalid value was detected, return 1.
-    expect_empty=`echo -n $TCPDUMP_TIMEOUT | sed 's/[0-9]//g'`
-    if [ "x" = "x${TCPDUMP_TIMEOUT}" ]; then
-        TCPDUMP_TIMEOUT=$DEFAULT_TCPDUMP_TIMEOUT
-    elif [ "x" != "x${expect_empty}" ]; then
-        log_info "config file parameter error. [$SCRIPT_CONF_FILE:TCPDUMP_TIMEOUT]"
-        return 1
-    fi
-    log_debug "config file parameter : TCPDUMP_TIMEOUT=$TCPDUMP_TIMEOUT"
+    TCPDUMP_TIMEOUT=${TCPDUMP_TIMEOUT:-10}
+    check_config_type 'int' TCPDUMP_TIMEOUT $TCPDUMP_TIMEOUT
 
-    # If the REGION_ID is omitted, return 1.
-    if [ -z "$REGION_ID" ]; then
-        log_info "config file parameter error. [$SCRIPT_CONF_FILE:REGION_ID]"
-        return 1
-    fi
-    log_debug "config file parameter : REGION_ID=$REGION_ID"
+    IPMI_TIMEOUT=${IPMI_TIMEOUT:-5}
+    check_config_type 'int' IPMI_TIMEOUT $IPMI_TIMEOUT
 
-    # If the IPMI_TIMEOUT is omitted, set the default value.
-    # If invalid value was detected, return 1.
-    expect_empty=`echo -n $IPMI_TIMEOUT | sed 's/[0-9]//g'`
-    if [ "x" = "x${IPMI_TIMEOUT}" ]; then
-        IPMI_TIMEOUT=$DEFAULT_IPMI_TIMEOUT
-    elif [ "x" != "x${expect_empty}" ]; then
-        log_info "config file parameter error. [$SCRIPT_CONF_FILE:IPMI_TIMEOUT]"
-        return 1
-    fi
-    log_debug "config file parameter : IPMI_TIMEOUT=$IPMI_TIMEOUT"
+    IPMI_RETRY_MAX=${IPMI_RETRY_MAX:-3}
+    check_config_type 'int' IPMI_RETRY_MAX $IPMI_RETRY_MAX
 
-    # If the IPMI_RETRY_MAX is omitted, set the default value.
-    # If invalid value was detected, return 1.
-    expect_empty=`echo -n $IPMI_RETRY_MAX | sed 's/[0-9]//g'`
-    if [ "x" = "x${IPMI_RETRY_MAX}" ]; then
-        IPMI_RETRY_MAX=$DEFAULT_IPMI_RETRY_MAX
-    elif [ "x" != "x${expect_empty}" ]; then
-        log_info "config file parameter error. [$SCRIPT_CONF_FILE:IPMI_RETRY_MAX]"
-        return 1
-    fi
-    log_debug "config file parameter : IPMI_RETRY_MAX=$IPMI_RETRY_MAX"
+    IPMI_RETRY_INTERVAL=${IPMI_RETRY_INTERVAL:-10}
+    check_config_type 'int' IPMI_RETRY_INTERVAL $IPMI_RETRY_INTERVAL
 
-    # If the IPMI_RETRY_INTERVAL is omitted, set the default value.
-    # If invalid value was detected, return 1.
-    expect_empty=`echo -n $IPMI_RETRY_INTERVAL | sed 's/[0-9]//g'`
-    if [ "x" = "x${IPMI_RETRY_INTERVAL}" ]; then
-        IPMI_RETRY_INTERVAL=$DEFAULT_IPMI_RETRY_INTERVAL
-    elif [ "x" != "x${expect_empty}" ]; then
-        log_info "config file parameter error. [$SCRIPT_CONF_FILE:IPMI_RETRY_INTERVAL]"
-        return 1
-    fi
-    log_debug "config file parameter : IPMI_RETRY_INTERVAL=$IPMI_RETRY_INTERVAL"
+    LOG_LEVEL=${LOG_LEVEL:-10}
+    check_config_type 'string' LOG_LEVEL $LOG_LEVEL
+
+    REGION_ID=${REGION_ID:-""}
+    check_config_type 'string' REGION_ID $REGION_ID
 
     return 0
 }
