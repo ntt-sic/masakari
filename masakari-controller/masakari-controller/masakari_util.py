@@ -177,11 +177,10 @@ class RecoveryControllerUtilDb(object):
             " iscsi_ip, controle_ip, " \
             " recover_to)"
 
-
         values = " VALUES " + \
-                 "(\'%s\',\'%s\',\'%s\',%s,\'%s\',\'%s\',\'%s\',\'%s\'," \
-                 "\'%s\',\'%s\',\'%s\',\'%s\',\'%s\',\'%s\',\'%s\',\"%s\"," \
-                 "\'%s\',\'%s\',%s,%s,\'%s\',\'%s\',\'%s\')"
+                 "(%s,%s,%s,%s,%s,%s,%s,%s," \
+                 "%s,%s,%s,%s,%s,%s,%s,\"%s\"," \
+                 "%s,%s,%s,%s,%s,%s,%s)"
 
         # NOTE: The notification item 'endTime' may have a NULL value.
         #       reference : The Notification Spec for RecoveryController.
@@ -230,40 +229,37 @@ class RecoveryControllerUtilDb(object):
                 # If reserve node is None, set progress 3.
                 if recover_to is None:
                     progress = 3
+            sql_operation = "INSERT INTO notification_list " + columns + values
+            sql_values = (
+                create_at, update_at, delete_at, deleted,
+                jsonData.get("id"), jsonData.get("type"),
+                jsonData.get("regionID"), jsonData.get("hostname"),
+                jsonData.get("uuid"), jsonData.get("time"),
+                jsonData.get("eventID"), jsonData.get("eventType"),
+                jsonData.get("detail"), jsonData.get("startTime"),
+                j_endTime, jsonData.get("tzname"),
+                jsonData.get("daylight"), jsonData.get("cluster_port"),
+                progress, recover_by, iscsi_ip, controle_ip, recover_to
+            )
 
-                sql_operation = "INSERT INTO notification_list " + columns
-                sql_values = values % (
-                    create_at, update_at, delete_at, deleted,
-                    jsonData.get("id"), jsonData.get("type"),
-                    jsonData.get("regionID"), jsonData.get("hostname"),
-                    jsonData.get("uuid"), jsonData.get("time"),
-                    jsonData.get("eventID"), jsonData.get("eventType"),
-                    jsonData.get("detail"), jsonData.get("startTime"),
-                    j_endTime, jsonData.get("tzname"),
-                    jsonData.get("daylight"), jsonData.get("cluster_port"),
-                    progress, recover_by, iscsi_ip, controle_ip, recover_to
-                )
+            self.rc_util.syslogout_ex("RecoveryControllerUtilDb_0006",
+                                      syslog.LOG_INFO)
+            cursor.execute(sql_operation, sql_values)
+            self.rc_util.syslogout("SQL=" + str(cursor._executed), syslog.LOG_INFO)
 
-                sql = "%s%s" % (sql_operation, sql_values)
+            #cursor.execute(sql)
 
-                self.rc_util.syslogout_ex("RecoveryControllerUtilDb_0006",
-                                          syslog.LOG_INFO)
-                self.rc_util.syslogout("SQL=" + str(sql), syslog.LOG_INFO)
+            #self.rc_util.syslogout("MYSQL QUERY=" + str(cursor._executed), syslog.LOG_INFO)
 
+            sql = ("select * from reserve_list "
+                   "where deleted=0 and hostname='%s' for update") % (jsonData.get("hostname"))
+
+            cnt = cursor.execute(sql)
+            if cnt > 0:
+                sql = ("update reserve_list "
+                       "set deleted=1, delete_at='%s' "
+                       "where hostname='%s'") % (datetime.datetime.now(),jsonData.get("hostname"))
                 cursor.execute(sql)
-
-                sql = ("select * from reserve_list "
-                       "where deleted=0 and hostname='%s' for update"
-                      ) % (jsonData.get("hostname"))
-
-                cnt = cursor.execute(sql)
-                if cnt > 0:
-                    sql = ("update reserve_list "
-                           "set deleted=1, delete_at='%s' "
-                           "where hostname='%s'"
-                          ) % (datetime.datetime.now(),
-                               jsonData.get("hostname"))
-                    cursor.execute(sql)
 
             ret_dic = {
                 "create_at": create_at,
