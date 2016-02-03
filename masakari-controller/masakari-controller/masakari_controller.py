@@ -547,11 +547,10 @@ class RecoveryController(object):
                     self.rc_util.syslogout(jsonData, syslog.LOG_INFO)
 
             # VM Recovery(processing G)
-            ## Change: jsonData.get("detail")) == '5' -> == '0'
             elif jsonData.get("type") == 'VM' and \
                  str(jsonData.get("eventID")) == '0' and \
                  str(jsonData.get("eventType")) == '5' and \
-                 str(jsonData.get("detail")) == '0':
+                 str(jsonData.get("detail")) == '5':
 
                 recover_by = 1  # VM recovery
                 ret_dic = self.rc_util_db.insert_notification_list_db(
