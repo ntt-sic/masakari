@@ -351,6 +351,15 @@ get_mcast_nic () {
     return 0
 }
 
+# Check whether masakari-hostmoitor works on pacemaker-remote
+# Return value
+#   0 : works on pacemaker-remote
+#   1 : doesn't work on pacemaker-remote
+is_pacemaker_remote() {
+    sudo service pacemaker_remote status > /dev/null 2>&1
+    return $?
+}
+
 # This function checks whether the HB line is alive
 # Return value 
 #   0 : The HB line is alive.
@@ -362,8 +371,16 @@ check_hb_line () {
     RET_CORO=$?
     sudo service pacemaker status > /dev/null 2>&1
     RET_PACE=$?
-    if ! [ ${RET_CORO} -eq 0 ] || ! [ ${RET_PACE} -eq 0 ]; then
-        log_debug "pacemaker or corosync is not running." 
+    is_pacemaker_remote
+    RET_REMOTE=$?
+    if ! [ [ [ ${RET_CORO} -eq 0 ] && [ ${RET_PACE} -eq 0 ] ] ||
+            [ ${RET_REMOTE} -eq 0 ] ] ; then
+        log_debug "neither pacemaker nor pacemaker-remote is running."
+        return 1
+    fi
+
+    if [ ${RET_REMOTE} -eq 0 ]; then
+        log_debug "works on pacemaker-remote."
         return 0
     fi
 
@@ -513,14 +530,14 @@ count_cluster_nodes () {
     nodes_array=()
 
     # Count the number of Online node.
-    online_nodes=`cat $TMP_CRM_MON_FILE | grep ^Online | sed -e 's/\s\{1,\}/ /g' | sed -e 's/ \]$//g' | cut -d" " -f3-`
+    online_nodes=`cat $TMP_CRM_MON_FILE | grep '^Online\|^RemoteOnline' | sed -e 's/\s\{1,\}/ /g' | sed -e 's/ \]$//g' | cut -d" " -f3- | tr '\n' ' '`
     log_debug "online nodes : $online_nodes"
     if [ -n "$online_nodes" ]; then
         nodes_array+=(`echo $online_nodes`)
     fi
 
     # Count the number of OFFLINE node.
-    offline_nodes=`cat $TMP_CRM_MON_FILE | grep ^OFFLINE | sed -e 's/\s\{1,\}/ /g' | sed -e 's/ \]$//g' | cut -d" " -f3-`
+    offline_nodes=`cat $TMP_CRM_MON_FILE | grep '^OFFLINE\|^RemoteOFFLINE' | sed -e 's/\s\{1,\}/ /g' | sed -e 's/ \]$//g' | cut -d" " -f3- | tr '\n' ' '`
     log_debug "offline nodes : $offline_nodes"
     if [ -n "$offline_nodes" ]; then
         nodes_array+=(`echo $offline_nodes`)
@@ -547,7 +564,7 @@ count_cluster_nodes () {
 #   2 : Starting or Stopping state
 #         Node is online,  and mixed "RA of Started" and "RA of Stopped"
 check_node_status () {
-    online_nodes=`cat $TMP_CRM_MON_FILE | grep ^Online | sed -e 's/\s\{1,\}/ /g' | sed -e 's/ \]$//g' | cut -d" " -f3-`
+    online_nodes=`cat $TMP_CRM_MON_FILE | grep '^Online\|^RemoteOnline' | sed -e 's/\s\{1,\}/ /g' | sed -e 's/ \]$//g' | cut -d" " -f3-`
     # Check whether the node of argument is "Online".
     if [ "`echo $online_nodes | grep -e "$1 " -e "$1$"`" ]; then
         # Check whether the node of state of all RA is "Started".
@@ -949,18 +966,22 @@ do
     fi
 
     # Check the heartbeat state of the own node.
-    check_hb_status
-    if [ $? -ne 0 ]; then
-        case $? in
-        1)
-            script_finalize 0
-            ;;
-        2)
-            script_finalize 1
-            ;;
-        esac
-        sleep $MONITOR_INTERVAL
-        continue
+    # It only checks hb status when this process runs on the full
+    # cluster stack of corosync.
+    if ! is_pacemaker_remote ; then
+        check_hb_status
+        if [ $? -ne 0 ]; then
+            case $? in
+                1)
+                    script_finalize 0
+                    ;;
+                2)
+                    script_finalize 1
+                    ;;
+            esac
+            sleep $MONITOR_INTERVAL
+            continue
+        fi
     fi
 
     # Get output result of crm_mon.
