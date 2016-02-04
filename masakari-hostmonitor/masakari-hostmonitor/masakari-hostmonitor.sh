@@ -142,9 +142,9 @@ script_finalize () {
 
 # Check the value is correct type
 # Argument
-#   $1: Value
-#   $2: Type
-#   $3: Parameter Name
+#   $1: Type
+#   $2: Parameter Name
+#   $3: Value
 # Return
 #   0: The value is correct type
 #   1: The value is not correct type
