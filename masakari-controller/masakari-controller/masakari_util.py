@@ -18,7 +18,6 @@
 """
 Management module of utility classes for VM recovery control
 """
-
 import ConfigParser
 import datetime
 import json
@@ -32,8 +31,9 @@ import socket
 import subprocess
 import sys
 import syslog
+import threading
 import traceback
-
+from eventlet import greenthread
 
 class RecoveryControllerUtilDb(object):
 
@@ -46,36 +46,25 @@ class RecoveryControllerUtilDb(object):
         self.rc_util = RecoveryControllerUtil(self.rc_config)
         self.rc_util_ap = RecoveryControllerUtilApi(self.rc_config)
 
-    def insert_vm_list_db(self, notification_id, notification_uuid, retry_cnt):
+    def insert_vm_list_db(self, cursor, notification_id,
+                          notification_uuid, retry_cnt):
         """
         VM list table registration
+        :param :cursor: cursor object
         :param :notification_id: Notification ID
                 (used as search criteria for notification list table)
         :param :notification_uuid:VM of uuid
                 (used as the registered contents of the VM list table)
         :param :retry_cnt:Retry count
                 (used as the registered contents of the VM list table)
+        :return :primary_id: The value of LAST_INSERT_ID
         """
 
         try:
-            conf_db_dic = self.rc_config.get_value('db')
-            conf_log_dic = self.rc_config.get_value('log')
-            # Connect db
-            db = MySQLdb.connect(host=conf_db_dic.get("host"),
-                                 db=conf_db_dic.get("name"),
-                                 user=conf_db_dic.get("user"),
-                                 passwd=conf_db_dic.get("passwd"),
-                                 charset=conf_db_dic.get("charset"))
-
-            log_level = conf_log_dic.get("log_level")
-
-            # Execute SQL
-            cursor = db.cursor(MySQLdb.cursors.DictCursor)
-
             sql = "SELECT recover_to, recover_by FROM notification_list " \
                   "WHERE notification_id = '%s'" % (notification_id)
-            cursor.execute(sql)
 
+            cursor.execute(sql)
             result = cursor.fetchone()
 
             # rowcount is always '1' because notification_id is unique
@@ -105,11 +94,17 @@ class RecoveryControllerUtilDb(object):
             self.rc_util.syslogout("SQL=" + sql, syslog.LOG_INFO)
 
             cursor.execute(sql)
-            db.commit()
 
-            # db connection close
-            cursor.close()
-            db.close()
+            # Get this primary id
+            sql = "SELECT LAST_INSERT_ID()"
+            cursor.execute(sql)
+            result = cursor.fetchone()
+
+            self.rc_util.syslogout(str(result), syslog.LOG_INFO)
+
+            primary_id = result.get("LAST_INSERT_ID()")
+
+            return primary_id
 
         except KeyError:
 
@@ -159,24 +154,16 @@ class RecoveryControllerUtilDb(object):
 
             raise
 
-    def insert_notification_list_db(self, jsonData, recover_by):
+    def insert_notification_list_db(self, jsonData, recover_by, cursor):
         """
            Insert into notification_list DB from notification JSON.
            :param :jsonData: notifocation json data.
            :param :recover_by:node recover(0)/VM recover(1)/process error(2)
+           :param :cursor: cursor object
            :return :ret_dic:and return the information that was registered to
                        notification_list table in the dictionary type
 
         """
-
-        # NOTE: Connection args will come from configurations.
-        conf_db_dic = self.rc_config.get_value('db')
-        con_args = {}
-        con_args['host'] = conf_db_dic.get("host")
-        con_args['db'] = conf_db_dic.get("name")
-        con_args['user'] = conf_db_dic.get("user")
-        con_args['passwd'] = conf_db_dic.get("passwd")
-        con_args['charset'] = conf_db_dic.get("charset")
 
         columns = " (create_at, update_at, delete_at, deleted, " \
             " notification_id, notification_type, " \
@@ -191,9 +178,9 @@ class RecoveryControllerUtilDb(object):
             " recover_to)"
 
         values = " VALUES " + \
-                 "(\'%s\',%s,%s,%s,\'%s\',\'%s\',\'%s\',\'%s\'," \
-                 "\'%s\',\'%s\',\'%s\',\'%s\',\'%s\',%s,%s,\"%s\"," \
-                 "\'%s\',\'%s\',%s,%s,\'%s\',\'%s\',\'%s\')"
+                 "(%s,%s,%s,%s,%s,%s,%s,%s," \
+                 "%s,%s,%s,%s,%s,%s,%s,\"%s\"," \
+                 "%s,%s,%s,%s,%s,%s,%s)"
 
         # NOTE: The notification item 'endTime' may have a NULL value.
         #       reference : The Notification Spec for RecoveryController.
@@ -206,14 +193,6 @@ class RecoveryControllerUtilDb(object):
         update_at = None
         delete_at = None
         deleted = 0
-
-	# noneToNull
-	def noneToNull(column):
-	    if column is None:
-		return "NULL"
-	    else:
-		return column
-
         # progress 0:not yet
         progress = 0
         # From /etc/hosts
@@ -242,50 +221,45 @@ class RecoveryControllerUtilDb(object):
         try:
             recover_to = None
             if recover_by == 0:
-
                 recover_to = self._get_reserve_node_from_reserve_list_db(
-                    con_args,
                     jsonData.get("cluster_port"),
-                    jsonData.get("hostname"))
+                    jsonData.get("hostname"),
+                    cursor)
 
                 # If reserve node is None, set progress 3.
                 if recover_to is None:
                     progress = 3
+            sql_operation = "INSERT INTO notification_list " + columns + values
+            sql_values = (
+                create_at, update_at, delete_at, deleted,
+                jsonData.get("id"), jsonData.get("type"),
+                jsonData.get("regionID"), jsonData.get("hostname"),
+                jsonData.get("uuid"), jsonData.get("time"),
+                jsonData.get("eventID"), jsonData.get("eventType"),
+                jsonData.get("detail"), jsonData.get("startTime"),
+                j_endTime, jsonData.get("tzname"),
+                jsonData.get("daylight"), jsonData.get("cluster_port"),
+                progress, recover_by, iscsi_ip, controle_ip, recover_to
+            )
 
-            with MySQLdb.connect(**con_args) as cursor:
-                sql_operation = "INSERT INTO notification_list " + columns
-                sql_values = values % (
-                    create_at, noneToNull(update_at), noneToNull(delete_at), deleted,
-                    jsonData.get("id"), jsonData.get("type"),
-                    jsonData.get("regionID"), jsonData.get("hostname"),
-                    jsonData.get("uuid"), jsonData.get("time"),
-                    jsonData.get("eventID"), jsonData.get("eventType"),
-                    jsonData.get("detail"), noneToNull(jsonData.get("startTime")),
-                    noneToNull(j_endTime), jsonData.get("tzname"),
-                    jsonData.get("daylight"), jsonData.get("cluster_port"),
-                    progress, recover_by, iscsi_ip, controle_ip, recover_to
-                )
+            self.rc_util.syslogout_ex("RecoveryControllerUtilDb_0006",
+                                      syslog.LOG_INFO)
+            cursor.execute(sql_operation, sql_values)
+            self.rc_util.syslogout("SQL=" + str(cursor._executed), syslog.LOG_INFO)
 
-                sql = "%s%s" % (sql_operation, sql_values)
+            #cursor.execute(sql)
 
-                self.rc_util.syslogout_ex("RecoveryControllerUtilDb_0006",
-                                          syslog.LOG_INFO)
-                self.rc_util.syslogout("SQL=" + str(sql), syslog.LOG_INFO)
+            #self.rc_util.syslogout("MYSQL QUERY=" + str(cursor._executed), syslog.LOG_INFO)
 
+            sql = ("select * from reserve_list "
+                   "where deleted=0 and hostname='%s' for update") % (jsonData.get("hostname"))
+
+            cnt = cursor.execute(sql)
+            if cnt > 0:
+                sql = ("update reserve_list "
+                       "set deleted=1, delete_at='%s' "
+                       "where hostname='%s'") % (datetime.datetime.now(),jsonData.get("hostname"))
                 cursor.execute(sql)
-
-                sql = ("select * from reserve_list "
-                       "where deleted=0 and hostname='%s'"
-                      ) % (jsonData.get("hostname"))
-
-                cnt = cursor.execute(sql)
-                if cnt > 0:
-                    sql = ("update reserve_list "
-                           "set deleted=1, delete_at='%s' "
-                           "where hostname='%s'"
-                          ) % (datetime.datetime.now(),
-                               jsonData.get("hostname"))
-                    cursor.execute(sql)
 
             ret_dic = {
                 "create_at": create_at,
@@ -331,30 +305,27 @@ class RecoveryControllerUtilDb(object):
             raise e
 
     def _get_reserve_node_from_reserve_list_db(self,
-                                               con_args,
                                                cluster_port,
-                                               notification_hostname):
+                                               notification_hostname,
+                                               cursor):
         """
         Get reserve node, check it in use and change to 'enable'.
         :param: con_args: args database connection.
         :param: cluster_port: select keys, cluster port number.
+        :param :cursor: cursor object
         :return: hostname: Host name of the spare node machine
                             (obtained from the spare node list table)
 
         """
 
-        csr = None
-        condb = None
         try:
             # check it in use
-            condb = MySQLdb.connect(**con_args)
-            csr = condb.cursor(MySQLdb.cursors.DictCursor)
             sql = ("select id,hostname from reserve_list "
                    "where deleted=0 and cluster_port='%s' and hostname!='%s' "
                    "order by create_at asc limit 1 for update"
                   ) % (cluster_port, notification_hostname)
 
-            cnt = csr.execute(sql)
+            cnt = cursor.execute(sql)
             if cnt == 0:
                 self.rc_util.syslogout_ex("RecoveryControllerUtilDb_0008",
                                           syslog.LOG_WARNING)
@@ -362,7 +333,7 @@ class RecoveryControllerUtilDb(object):
                 self.rc_util.syslogout(msg, syslog.LOG_WARNING)
                 hostname = None
             if cnt == 1:
-                reserves = csr.fetchone()
+                reserves = cursor.fetchone()
                 hostname = reserves.get('hostname')
 
         except Exception as e:
@@ -380,63 +351,7 @@ class RecoveryControllerUtilDb(object):
 
             raise e
 
-        finally:
-            if csr:
-                csr.close()
-
-            if condb:
-                condb.close()
         return hostname
-
-    def _delete_reserve_node(self, con_args, cluster_port):
-        """
-        Delete reserve node.
-        :param: con_args: args database connection.
-        :param: cluster_port: select keys, cluster port number.
-        """
-        condb = None
-        csr = None
-
-        try:
-            # check it in use
-            condb = MySQLdb.connect(**con_args)
-            csr = condb.cursor(MySQLdb.cursors.DictCursor)
-
-            delete_at = datetime.datetime.now()
-            sql = "update reserve_list set deleted=1 , " \
-                  "delete_at='%s' " \
-                  "where cluster_port='%s'" \
-                  % (delete_at, cluster_port)
-
-            self.rc_util.syslogout_ex(
-                "RecoveryControllerUtilDb_0020", syslog.LOG_INFO)
-            self.rc_util.syslogout(
-                "SQL=" + str(sql), syslog.LOG_INFO)
-
-            csr.execute(sql)
-            condb.commit()
-
-        except Exception as e:
-
-            self.rc_util.syslogout_ex("RecoveryControllerUtilDb_0021",
-                                      syslog.LOG_ERR)
-            error_type, error_value, traceback_ = sys.exc_info()
-            tb_list = traceback.format_tb(traceback_)
-            self.rc_util.syslogout(error_type, syslog.LOG_ERR)
-            self.rc_util.syslogout(error_value, syslog.LOG_ERR)
-            for tb in tb_list:
-                self.rc_util.syslogout(tb, syslog.LOG_ERR)
-
-            self.rc_util.syslogout(e.message, syslog.LOG_ERR)
-
-            raise e
-
-        finally:
-            if csr:
-                csr.close()
-
-            if condb:
-                condb.close()
 
     def update_notification_list_db(self, key, value, notification_id):
         """
@@ -446,10 +361,10 @@ class RecoveryControllerUtilDb(object):
         :param :notification_id: Notification ID
                 (updated narrowing condition of notification list table)
         """
-
+        ## TODO:
+        ## Get the cursor from Func Args and remove this MySQLdb.connect
         try:
             conf_db_dic = self.rc_config.get_value('db')
-            conf_log_dic = self.rc_config.get_value('log')
             # Connect db
             db = MySQLdb.connect(host=conf_db_dic.get("host"),
                                  db=conf_db_dic.get("name"),
@@ -457,31 +372,29 @@ class RecoveryControllerUtilDb(object):
                                  passwd=conf_db_dic.get("passwd"),
                                  charset=conf_db_dic.get("charset"))
 
-            log_level = conf_log_dic.get("log_level")
-
             # Execute SQL
             cursor = db.cursor()
 
-            sql = "UPDATE notification_list SET %s = %s " \
-                  "WHERE notification_id = '%s'" \
-                  % (key, value, notification_id)
-
-            self.rc_util.syslogout_ex("RecoveryControllerUtilDb_0011",
-                                      syslog.LOG_INFO)
-            self.rc_util.syslogout("SQL=" + sql, syslog.LOG_INFO)
-
+            # Set autocommit True
+            sql = "SET SESSION autocommit = 1"
             cursor.execute(sql)
 
-            if key == "progress" and value == 2:
-                sql = "UPDATE notification_list SET delete_at = '%s' " \
+            # Update progress with update_at and delete_at
+            now = datetime.datetime.now()
+            if key == 'progress':
+                sql = "UPDATE notification_list " \
+                      "SET progress = %s, update_at = '%s', " \
+                      "delete_at = '%s' " \
                       "WHERE notification_id = '%s'" \
-                      % (datetime.datetime.now(), notification_id)
+                      % (value, now, now, notification_id)
+            # Updated than progress
             else:
-                sql = "UPDATE notification_list SET update_at = '%s' " \
+                sql = "UPDATE notification_list SET %s = '%s', " \
+                      "update_at = '%s' " \
                       "WHERE notification_id = '%s'" \
-                      % (datetime.datetime.now(), notification_id)
+                      % (key, value, now, notification_id)
 
-            self.rc_util.syslogout_ex("RecoveryControllerUtilDb_0012",
+            self.rc_util.syslogout_ex("RecoveryControllerUtilDb_0011",
                                       syslog.LOG_INFO)
             self.rc_util.syslogout("SQL=" + sql, syslog.LOG_INFO)
 
@@ -525,7 +438,7 @@ class RecoveryControllerUtilDb(object):
 
             raise MySQLdb.Error
 
-    def update_vm_list_db(self, key, value, uuid):
+    def update_vm_list_db(self, key, value, primary_id):
         """
         VM list table update
         :param :key: Update column name
@@ -535,7 +448,6 @@ class RecoveryControllerUtilDb(object):
 
         try:
             conf_db_dic = self.rc_config.get_value('db')
-            conf_log_dic = self.rc_config.get_value('log')
             # Connect db
             db = MySQLdb.connect(host=conf_db_dic.get("host"),
                                  db=conf_db_dic.get("name"),
@@ -543,45 +455,35 @@ class RecoveryControllerUtilDb(object):
                                  passwd=conf_db_dic.get("passwd"),
                                  charset=conf_db_dic.get("charset"))
 
-            log_level = conf_log_dic.get("log_level")
-
             # Execute SQL
             cursor = db.cursor(MySQLdb.cursors.DictCursor)
 
-            sql = "SELECT id FROM vm_list " \
-                  "WHERE uuid = '%s' ORDER BY create_at DESC LIMIT 1" \
-                  % (uuid)
-
-            cursor.execute(sql)
-            result = cursor.fetchone()
-            result_id = result.get('id')
-
-            sql = (("UPDATE vm_list SET %s = %s WHERE id = '%s'")
-                   % (key,
-                      value,
-                      result_id))
-
-            self.rc_util.syslogout_ex("RecoveryControllerUtilDb_0015",
-                                      syslog.LOG_INFO)
-            self.rc_util.syslogout("SQL=" + sql, syslog.LOG_INFO)
-
+            # Set autocommit True
+            sql = "SET SESSION autocommit = 1"
             cursor.execute(sql)
 
-            if key == "progress" and value == 2:
-                sql = (("UPDATE vm_list SET delete_at = '%s' WHERE id = '%s'")
-                       % (datetime.datetime.now(), result_id))
+            # Updated progress to start
+            now = datetime.datetime.now()
+            if key == 'progress' and value == 1:
+                sql = "UPDATE vm_list " \
+                      "SET progress = %s, update_at = '%s' " \
+                      "WHERE id = '%s'" \
+                      % (value, now, primary_id)
+            # End the progress([success:2][error:3][skipped old:4])
+            elif key == 'progress':
+                sql = "UPDATE vm_list " \
+                      "SET progress = %s, " \
+                      "update_at = '%s', delete_at = '%s' " \
+                      "WHERE id = '%s'" \
+                      % (value, now, now, primary_id)
+            # Update than progress
             else:
-                sql = (("UPDATE vm_list SET update_at = '%s' WHERE id = '%s'")
-                       % (datetime.datetime.now(), result_id))
-
-            self.rc_util.syslogout_ex("RecoveryControllerUtilDb_0016",
-                                      syslog.LOG_INFO)
-            self.rc_util.syslogout("SQL=" + sql, syslog.LOG_INFO)
+                sql = "UPDATE vm_list SET %s = '%s' WHERE id = '%s'" \
+                      % (key, value, primary_id)
 
             cursor.execute(sql)
 
             db.commit()
-
             # db connection close
             cursor.close()
             db.close()
@@ -617,6 +519,169 @@ class RecoveryControllerUtilDb(object):
             self.rc_util.syslogout(msg, syslog.LOG_ERR)
 
             raise MySQLdb.Error
+
+    def connect_database(self, database_name=None):
+        """
+        Connect to database.
+        ### Caution ###
+        Closing should be carried out in another.
+        :param: database_name: connection target
+        :return :conn :connect object
+        :return :cursor :cursor object
+        """
+        try:
+            conn = None
+            cursor = None
+            # Get Config.
+            conf_db_dic = self.rc_config.get_value('db')
+            host = conf_db_dic.get("host")
+            db = conf_db_dic.get("name")
+            user = conf_db_dic.get("user")
+            passwd = conf_db_dic.get("passwd")
+            charset = conf_db_dic.get("charset")
+            innodb_lock_wait_timeout = conf_db_dic.get("innodb_lock_wait_timeout")
+
+            # Overwrite if specified
+            if database_name:
+                db = database_name
+
+            # Connect database
+            conn = MySQLdb.connect(host=host,
+                                   db=db,
+                                   user=user,
+                                   passwd=passwd,
+                                   charset=charset
+                                   )
+
+            # Set cursor
+            cursor = conn.cursor(MySQLdb.cursors.DictCursor)
+            sql = "SET SESSION innodb_lock_wait_timeout = %s" \
+                  % (innodb_lock_wait_timeout)
+            cursor.execute(sql)
+            sql = "SET SESSION autocommit = 0"
+            cursor.execute(sql)
+
+            return conn, cursor
+
+        except MySQLdb.Error:
+            self.rc_util.syslogout_ex("RecoveryControllerUtilDb_0022",
+                                      syslog.LOG_ERR)
+            error_type, error_value, traceback_ = sys.exc_info()
+            tb_list = traceback.format_tb(traceback_)
+            self.rc_util.syslogout(error_type, syslog.LOG_ERR)
+            self.rc_util.syslogout(error_value, syslog.LOG_ERR)
+            for tb in tb_list:
+                self.rc_util.syslogout(tb, syslog.LOG_ERR)
+            msg = "Exception : MySQLdb.Error in connection_database()."
+            self.rc_util.syslogout(msg, syslog.LOG_ERR)
+
+            if conn:
+                conn.close()
+
+            raise MySQLdb.Error
+
+    def disconnect_database(self, conn, cursor):
+        """
+        Disconnect database.
+        :param: conn: connecting object
+        :param: cursor: cursor object
+        """
+        try:
+            if conn:
+                conn.commit()
+            if cursor:
+                cursor.close()
+            if conn:
+                conn.close()
+        except MySQLdb.Error:
+            self.rc_util.syslogout_ex("RecoveryControllerUtilDb_0023",
+                                      syslog.LOG_ERR)
+            error_type, error_value, traceback_ = sys.exc_info()
+            tb_list = traceback.format_tb(traceback_)
+            self.rc_util.syslogout(error_type, syslog.LOG_ERR)
+            self.rc_util.syslogout(error_value, syslog.LOG_ERR)
+            for tb in tb_list:
+                self.rc_util.syslogout(tb, syslog.LOG_ERR)
+            msg = "Exception : MySQLdb.Error in disconnection_database()."
+            self.rc_util.syslogout(msg, syslog.LOG_ERR)
+
+            raise MySQLdb.Error
+
+    def run_lock_query(self, table_name, cursor):
+        """
+        Lock the specified table.
+        :param: table_name: Lock target table
+        :param: cursor: Operate database cursor
+
+        ### Caution ###
+        It is used in conjunction with the insert or update.
+        Commit is necessary.
+        """
+        # Query for the lock table. Output is unnecessary.
+        sql = 'SELECT * FROM %s FOR UPDATE' % (table_name)
+
+        self.rc_util.syslogout_ex("RecoveryControllerUtilDb_0024",
+                                  syslog.LOG_INFO)
+        lock_msg = 'Lock table. target: %s' % (table_name)
+        self.rc_util.syslogout(lock_msg, syslog.LOG_INFO)
+
+        self.rc_util.syslogout_ex("RecoveryControllerUtilDb_0025",
+                                  syslog.LOG_INFO)
+        self.rc_util.syslogout('SQL=' + sql, syslog.LOG_INFO)
+        conf_dict = self.rc_config.get_value('db')
+        lock_retry_max_cnt = conf_dict.get('lock_retry_max_cnt')
+        retry_cnt = 0
+        while retry_cnt < int(lock_retry_max_cnt) + 1:
+            try:
+                cursor.execute(sql)
+                break
+            except MySQLdb.OperationalError as e:
+                if e.args[0] == 1205:
+                    self.rc_util.syslogout_ex("RecoveryControllerUtilDb_0034",
+                                              syslog.LOG_INFO)
+                    error_type, error_value, traceback_ = sys.exc_info()
+                    tb_list = traceback.format_tb(traceback_)
+                    self.rc_util.syslogout(error_type, syslog.LOG_INFO)
+                    self.rc_util.syslogout(error_value, syslog.LOG_INFO)
+                    for tb in tb_list:
+                        self.rc_util.syslogout(tb, syslog.LOG_INFO)
+                    msg = 'Lock timeout detected: will retry.'
+                    self.rc_util.syslogout(msg, syslog.LOG_INFO)
+                    retry_cnt += 1
+                else:
+                    self.rc_util.syslogout_ex("RecoveryControllerUtilDb_0026",
+                                              syslog.LOG_ERR)
+                    error_type, error_value, traceback_ = sys.exc_info()
+                    tb_list = traceback.format_tb(traceback_)
+                    self.rc_util.syslogout(error_type, syslog.LOG_ERR)
+                    self.rc_util.syslogout(error_value, syslog.LOG_ERR)
+                    for tb in tb_list:
+                        self.rc_util.syslogout(tb, syslog.LOG_ERR)
+
+                    raise e
+
+            except MySQLdb.Error:
+                self.rc_util.syslogout_ex("RecoveryControllerUtilDb_0027",
+                                          syslog.LOG_ERR)
+                error_type, error_value, traceback_ = sys.exc_info()
+                tb_list = traceback.format_tb(traceback_)
+                self.rc_util.syslogout(error_type, syslog.LOG_ERR)
+                self.rc_util.syslogout(error_value, syslog.LOG_ERR)
+                for tb in tb_list:
+                    self.rc_util.syslogout(tb, syslog.LOG_ERR)
+                msg = "Exception : MySQLdb.Error in lock_table()."
+                self.rc_util.syslogout(msg, syslog.LOG_ERR)
+
+                raise MySQLdb.Error
+
+        # Retry over
+        if retry_cnt > int(lock_retry_max_cnt):
+            self.rc_util.syslogout_ex("RecoveryControllerUtilDb_0028",
+                                      syslog.LOG_ERR)
+            msg = 'Lock timeout retry count exceeded, giving up.'
+            self.rc_util.syslogout(msg, syslog.LOG_ERR)
+            raise MySQLdb.Error
+
 
 
 class RecoveryControllerUtilApi(object):
@@ -750,11 +815,12 @@ class RecoveryControllerUtilApi(object):
 
         return response_code, rbody
 
-    def do_instance_reset(self, uuid):
+    def do_instance_reset(self, uuid, status):
         """
         API-reset. Edit the body of the curl
         is performed using the nova client.
         :uuid : Instance id to be used in nova cliant curl.
+        :status :Status that you specify for the API.
         :return :response_code :response code
         :return :rbody :response body(json)
         """
@@ -765,7 +831,7 @@ class RecoveryControllerUtilApi(object):
             # Set nova_variable_url
             nova_variable_url = "/servers/" + uuid + "/action"
             # Set nova_body
-            nova_body = "{\"os-resetState\":{\"state\":\"error\"}}"
+            nova_body = "{\"os-resetState\":{\"state\":\"" + status + "\"}}"
 
             response_code, rbody = self._nova_curl_client(nova_curl_method,
                                                           nova_variable_url,
@@ -930,40 +996,66 @@ class RecoveryControllerUtilApi(object):
 
         return response_code, rbody
 
+    ##TODO(sampath):
+    ##Use novaclient and omit this code
+    ##For now, imported this code from current release
     def _get_x_subject_token(self, curl_response):
 
         x_subject_token = None
-        curl_response_str = str(curl_response)
-        tokenIndex_s = curl_response_str.find('X-Subject-Token') + 17
-        tokenIndex_e = curl_response_str.find('\'', tokenIndex_s)
-        x_subject_token = curl_response_str[tokenIndex_s:tokenIndex_e]
+        for line in curl_response:
+            obj = re.match("(X-Subject-Token:\s*)([\w|-]+)", line,
+                           re.IGNORECASE)
+            if obj is not None:
+                x_subject_token = obj.group(2)
+                break
 
         return x_subject_token
 
     def _get_body(self, curl_response):
         return curl_response[-1]
 
+    ##TODO(sampath):
+    ##Use novaclient and omit this code
+    ##For now, imported this code from current release
     def _exe_curl(self, curl):
 
-        p = subprocess.Popen(curl,
-                             shell=True,
-                             cwd='./',
-                             stdout=subprocess.PIPE,
-                             stderr=subprocess.PIPE)
+        conf_dic = self.rc_config.get_value('recover_starter')
+        api_max_retry_cnt = conf_dic.get('api_max_retry_cnt')
+        api_retry_interval = conf_dic.get('api_retry_interval')
 
-        out, err = p.communicate()
+        for cnt in range(0, int(api_max_retry_cnt) + 1):
+            line_list = []
+            p = subprocess.Popen(curl,
+                                 shell=True,
+                                 cwd='./',
+                                 stdout=subprocess.PIPE,
+                                 stderr=subprocess.PIPE)
 
-        self.rc_util.syslogout_ex("RecoveryControllerUtilApi_0008",
-                                  syslog.LOG_INFO)
-        self.rc_util.syslogout("curl request:" + curl, syslog.LOG_INFO)
-        self.rc_util.syslogout("curl response:" + out, syslog.LOG_INFO)
+            out, err = p.communicate()
+            rc = p.returncode
 
-        # Only last respons.
-        s_body_pos = out.rfind('\n\n')
-        s_head_pos = out[:s_body_pos].rfind('HTTP')
-        out = out[s_head_pos:]
+            self.rc_util.syslogout_ex("RecoveryControllerUtilApi_0008",
+                                      syslog.LOG_INFO)
+            self.rc_util.syslogout("curl request:" + curl, syslog.LOG_INFO)
+            self.rc_util.syslogout("curl response:" + out, syslog.LOG_INFO)
+            self.rc_util.syslogout("curl return code:" + str(rc),
+                                   syslog.LOG_INFO)
 
-        return out.splitlines()
+            if rc == 0:
+                line_list = out.splitlines()
+                # If HTTP status code is 5xx, do retry.
+                if re.match("HTTP/1.\d 5\d\d ", line_list[0]) is not None:
+                    greenthread.sleep(int(api_retry_interval))
+                    continue
+                break
+            # If curl response code is error, do retry.
+            elif rc == 28 or rc == 52 or rc == 55 or rc == 56 or rc == 89:
+                greenthread.sleep(int(api_retry_interval))
+                continue
+            else:
+                break
+
+        return line_list
 
     def _nova_curl_client(self,
                           nova_curl_method=None,
@@ -1021,37 +1113,60 @@ class RecoveryControllerUtilApi(object):
         if project_name is None:
             project_name = optinal_arg.get("project_name")
 
-        # I get a token of admin.
-        nova_client_url, token, project_id, response_code \
-            = self._get_token_admin(auth_url,
-                                    domain,
-                                    admin_user,
-                                    admin_password,
-                                    project_name)
+        api_max_retry_cnt = int(self.rc_config.get_value(
+            "recover_starter").get("api_max_retry_cnt"))
+        api_retry_cnt_get_detail = 0
+        api_retry_cnt_exec_api = 0
 
-        # Get the admintoken by the project (tenant_id) in scope in the case of
-        # non-GET
-        if nova_curl_method != "GET":
+        while api_retry_cnt_get_detail <= api_max_retry_cnt and \
+                api_retry_cnt_exec_api <= api_max_retry_cnt:
 
-            nova_client_url, response_code, rbody \
-                = self._get_detail(nova_client_url,
-                                   nova_variable_url,
-                                   token)
-
+            # I get a token of admin.
             nova_client_url, token, project_id, response_code \
-                = self._get_token_project_scope(auth_url,
-                                                domain,
-                                                admin_user,
-                                                admin_password,
-                                                project_id)
+                = self._get_token_admin(auth_url,
+                                        domain,
+                                        admin_user,
+                                        admin_password,
+                                        project_name)
 
-        # Run the Objective curl
-        response_code, rbody \
-            = self._run_curl_objective(nova_curl_method,
-                                       nova_client_url,
+            # Get the admintoken by the project_id in scope in the case of
+            # non-GET
+            if nova_curl_method != "GET":
+                nova_client_url, response_code, rbody \
+                    = self._get_detail(nova_client_url,
                                        nova_variable_url,
-                                       nova_body,
                                        token)
+
+                # The re-implementation in the case of authentication error
+                if response_code == "401":
+                    api_retry_cnt_get_detail += 1
+                    if api_retry_cnt_get_detail > api_max_retry_cnt:
+                        error_msg = "detail acquisition failure"
+                        raise Exception(error_msg)
+                    else:
+                        continue
+
+                nova_client_url, token, project_id, response_code \
+                    = self._get_token_project_scope(auth_url,
+                                                    domain,
+                                                    admin_user,
+                                                    admin_password,
+                                                    project_id)
+
+            # Run the Objective curl
+            response_code, rbody \
+                = self._run_curl_objective(nova_curl_method,
+                                           nova_client_url,
+                                           nova_variable_url,
+                                           nova_body,
+                                           token)
+
+            # The re-implementation in the case of authentication error
+            if response_code == "401":
+                api_retry_cnt_exec_api += 1
+                api_retry_cnt_get_detail = 0
+            else:
+                break
 
         return response_code, rbody
 
@@ -1075,14 +1190,10 @@ class RecoveryControllerUtilApi(object):
                      % (domain, admin_user, admin_password, domain,
                         project_name)
 
-        conf_dic = self.rc_config.get_value('recover_starter')
-        api_max_retry_cnt = conf_dic.get('api_max_retry_cnt')
-        api_retry_interval = conf_dic.get('api_retry_interval')
-
-        token_curl = "curl --retry %s --retry-delay %s " \
+        token_curl = "curl " \
                      "-i '%s' -X POST -H \"Accept: application/json\" " \
                      "-H \"Content-Type: application/json\" -d '%s'" \
-                     % (api_max_retry_cnt, api_retry_interval, token_url,
+                     % (token_url,
                         token_body)
 
         # Get token id.
@@ -1097,9 +1208,7 @@ class RecoveryControllerUtilApi(object):
         # Token acquisition
         token = self._get_x_subject_token(token_get_res)
 
-        for line in token_get_res:
-            if line.find("HTTP") == 0:
-                response_code = line.split(" ")[1]
+        response_code = token_get_res[0].split(" ")[1]
 
         if response_code != "201":
 
@@ -1109,7 +1218,6 @@ class RecoveryControllerUtilApi(object):
             raise Exception("token acquisition failure")
 
         # Response body acquisition
-        token_res_body = self._get_body(token_get_res)
         res_json = json.loads(token_get_res[-1])
         project_id = res_json.get("token").get("project").get("id")
 
@@ -1126,6 +1234,7 @@ class RecoveryControllerUtilApi(object):
 
         return nova_client_url, token, project_id, response_code
 
+
     def _get_detail(self,
                     nova_client_url,
                     nova_variable_url,
@@ -1138,17 +1247,12 @@ class RecoveryControllerUtilApi(object):
         if nova_variable_url is not None:
             nova_client_url = "%s%s" % (nova_client_url, "/servers/detail")
 
-        conf_dic = self.rc_config.get_value('recover_starter')
-        api_max_retry_cnt = conf_dic.get('api_max_retry_cnt')
-        api_retry_interval = conf_dic.get('api_retry_interval')
-
-        nova_client_curl = "curl --retry %s --retry-delay %s " \
+        nova_client_curl = "curl " \
                            "-i \"%s\" -X GET " \
                            "-H \"Accept: application/json\" " \
                            "-H \"Content-Type: application/json\" " \
                            "-H \"X-Auth-Token: %s\"" \
-                           % (api_max_retry_cnt, api_retry_interval,
-                              nova_client_url, token)
+                           % (nova_client_url, token)
         nova_exe_res = self._exe_curl(nova_client_curl)
 
         if len(nova_exe_res) == 0:
@@ -1157,11 +1261,9 @@ class RecoveryControllerUtilApi(object):
             self.rc_util.syslogout("exec curl command failure", syslog.LOG_ERR)
             raise Exception("exec curl command failure")
 
-        for line in nova_exe_res:
-            if line.find("HTTP") == 0:
-                response_code = line.split(" ")[1]
+        response_code = nova_exe_res[0].split(" ")[1]
 
-        if response_code != "200":
+        if response_code != "200" and response_code != "401":
             self.rc_util.syslogout_ex("RecoveryControllerUtilApi_0011",
                                       syslog.LOG_ERR)
             self.rc_util.syslogout("detail acquisition failure",
@@ -1169,15 +1271,7 @@ class RecoveryControllerUtilApi(object):
             raise Exception("detail acquisition failure")
         else:
             try:
-                for line in nova_exe_res:
-                    if "Content-Length" in line:
-                        length = line.split(" ")[-1]
-
-                        if length != "0":
-                            rbody = self._get_body(nova_exe_res)
-
-                        else:
-                            raise Exception("Is not enough response body.")
+                rbody = self._get_body(nova_exe_res)
 
             except Exception, e:
 
@@ -1213,15 +1307,10 @@ class RecoveryControllerUtilApi(object):
                      "{ \"id\": \"%s\"} } } }" \
                      % (domain, admin_user, admin_password, project_id)
 
-        conf_dic = self.rc_config.get_value('recover_starter')
-        api_max_retry_cnt = conf_dic.get('api_max_retry_cnt')
-        api_retry_interval = conf_dic.get('api_retry_interval')
-
-        token_curl = "curl --retry %s --retry-delay %s " \
+        token_curl = "curl " \
                      "-i '%s' -X POST -H \"Accept: application/json\" " \
                      "-H \"Content-Type: application/json\" -d '%s'" \
-                     % (api_max_retry_cnt, api_retry_interval,
-                        token_url, token_body)
+                     % (token_url, token_body)
 
         # Get token id.
         token_get_res = self._exe_curl(token_curl)
@@ -1232,9 +1321,7 @@ class RecoveryControllerUtilApi(object):
             self.rc_util.syslogout("exec curl command failure", syslog.LOG_ERR)
             raise Exception("exec curl command failure")
 
-        for line in token_get_res:
-            if line.find("HTTP") == 0:
-                response_code = line.split(" ")[1]
+        response_code = token_get_res[0].split(" ")[1]
 
         if response_code != "201":
             self.rc_util.syslogout_ex("RecoveryControllerUtilApi_0013",
@@ -1244,9 +1331,6 @@ class RecoveryControllerUtilApi(object):
 
         # Token acquisition
         token = self._get_x_subject_token(token_get_res)
-
-        # Response body acquisition
-        token_res_body = self._get_body(token_get_res)
 
         res_json = json.loads(token_get_res[-1])
 
@@ -1278,15 +1362,10 @@ class RecoveryControllerUtilApi(object):
         if nova_variable_url is not None:
             nova_client_url = "%s%s" % (nova_client_url, nova_variable_url)
 
-        conf_dic = self.rc_config.get_value('recover_starter')
-        api_max_retry_cnt = conf_dic.get('api_max_retry_cnt')
-        api_retry_interval = conf_dic.get('api_retry_interval')
-
-        nova_client_curl = "curl --retry %s --retry-delay %s " \
+        nova_client_curl = "curl " \
                            "-i \"%s\" -X %s -H \"Content-Type: " \
                            "application/json\" -H \"X-Auth-Token: %s\"" \
-                           % (api_max_retry_cnt, api_retry_interval,
-                              nova_client_url, nova_curl_method, token)
+                           % (nova_client_url, nova_curl_method, token)
 
         if nova_body is not None:
             nova_client_curl = "%s -d '%s'" % (nova_client_curl, nova_body)
@@ -1299,9 +1378,7 @@ class RecoveryControllerUtilApi(object):
             self.rc_util.syslogout("exec curl command failure", syslog.LOG_ERR)
             raise Exception("exec curl command failure")
 
-        for line in nova_exe_res:
-            if line.find("HTTP") == 0:
-                response_code = line.split(" ")[1]
+        response_code = nova_exe_res[0].split(" ")[1]
 
         if response_code != "200" and response_code != "202":
             self.rc_util.syslogout_ex("RecoveryControllerUtilApi_0014",
@@ -1309,13 +1386,7 @@ class RecoveryControllerUtilApi(object):
             self.rc_util.syslogout("exec curl command failure", syslog.LOG_ERR)
 
         try:
-            for line in nova_exe_res:
-                if "Content-Length" in line:
-                    length = line.split(" ")[-1]
             rbody = self._get_body(nova_exe_res)
-
-            if len(rbody) != int(length):
-                raise Exception("Bad response body.")
 
         except Exception, e:
 
@@ -1349,22 +1420,23 @@ class RecoveryControllerUtil(object):
         :msgid : Log output message ID(Monitoring message)
         :logOutLevel: Log output level
         """
-
-        monitoring_message = "--MonitoringMessage--ID:[%s]" % (msgid)
+        monitoring_message = str(threading.current_thread())\
+                           + " --MonitoringMessage--ID:[%s]" % (msgid)
         self.syslogout(monitoring_message, logOutLevel)
 
-    def syslogout(self, msg, logOutLevel):
+
+    def syslogout(self, rawmsg, logOutLevel):
         """
         I output the log to a given log file
         :msg : Log output messages
         :logOutLevel: Log output level
         """
+        msg = str(threading.current_thread()) + " " + str(rawmsg)
 
         config_log_dic = self.rc_config.get_value('log')
         logLevel = config_log_dic.get("log_level")
 
         # Output log
-        arg0 = os.path.basename(sys.argv[0])
         host = socket.gethostname()
 
         logger = logging.getLogger()
@@ -1386,10 +1458,11 @@ class RecoveryControllerUtil(object):
 
         logger.setLevel(wk_setLevel)
         f = "%(asctime)s " + host + \
-            " masakari(%(process)d): %(levelname)s: %(message)s'"
+            " masakari-controller(%(process)d): %(levelname)s: %(message)s'"
         formatter = logging.Formatter(fmt=f, datefmt='%b %d %H:%M:%S')
         fh = logging.FileHandler(
             filename='/var/log/masakari/masakari-controller.log')
+
         fh.setLevel(wk_setLevel)
         fh.setFormatter(formatter)
         logger.addHandler(fh)

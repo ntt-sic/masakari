@@ -94,6 +94,10 @@ class RecoveryControllerConfig(object):
         conf_db['user'] = inifile.get('db', 'user')
         conf_db['passwd'] = inifile.get('db', 'passwd')
         conf_db['charset'] = inifile.get('db', 'charset')
+        conf_db['lock_retry_max_cnt'] = \
+            inifile.get('db', 'lock_retry_max_cnt')
+        conf_db['innodb_lock_wait_timeout'] = \
+            inifile.get('db', 'innodb_lock_wait_timeout')
 
         return conf_db
 
@@ -125,7 +129,8 @@ class RecoveryControllerConfig(object):
             'recover_starter', 'api_check_interval')
         conf_recover_starter['api_check_max_cnt'] = inifile.get(
             'recover_starter', 'api_check_max_cnt')
-
+        conf_recover_starter['notification_expiration_sec'] = \
+            inifile.get( 'recover_starter', 'notification_expiration_sec')
 
         return conf_recover_starter
 
