@@ -15,7 +15,7 @@
 # limitations under the License.
 
 # Define constants
-SCRIPT_DIR="/opt/masakari/masakari-processmonitor"
+SCRIPT_DIR="/opt/masakari/processmonitor"
 SCRIPT_COMMON_SH="$SCRIPT_DIR/common.sh"
 
 TMP_DIR="/var/tmp"

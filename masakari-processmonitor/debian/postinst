@@ -4,8 +4,8 @@ ucf /etc/masakari/masakari-processmonitor.conf.sample /etc/masakari/masakari-pro
 ucf /etc/masakari/proc.list.sample /etc/masakari/proc.list
 LOG_DIR=/var/log/masakari
 if [ -z "`dpkg-statoverride --list ${LOG_DIR}`" ] ; then dpkg-statoverride --update --add openstack openstack 0755 ${LOG_DIR}; fi
-dpkg-statoverride --update --add openstack openstack 0755 /opt/masakari/masakari-processmonitor/common.sh
-dpkg-statoverride --update --add openstack openstack 0755 /opt/masakari/masakari-processmonitor/nova_compute_reboot_before.sh
-dpkg-statoverride --update --add openstack openstack 0755 /opt/masakari/masakari-processmonitor/process_status_checker.sh
-dpkg-statoverride --update --add openstack openstack 0755 /opt/masakari/masakari-processmonitor/masakari-processmonitor.sh
+dpkg-statoverride --update --add openstack openstack 0755 /opt/masakari/processmonitor/common.sh
+dpkg-statoverride --update --add openstack openstack 0755 /opt/masakari/processmonitor/nova_compute_reboot_before.sh
+dpkg-statoverride --update --add openstack openstack 0755 /opt/masakari/processmonitor/process_status_checker.sh
+dpkg-statoverride --update --add openstack openstack 0755 /opt/masakari/processmonitor/processmonitor.sh
 exit 0

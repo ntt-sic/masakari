@@ -23,7 +23,7 @@ TMP_CRMADM_FILE="$TMP_DIR/crmadmin.tmp"
 NOTICE_OUTPUT="$TMP_DIR/${BASE_NAME}_resp.out"
 JSON_DIR="$TMP_DIR/tmp_json_files"
 
-SCRIPT_DIR="/opt/masakari/masakari-processmonitor"
+SCRIPT_DIR="/opt/masakari/processmonitor"
 SCRIPT_CONF_FILE="/etc/masakari/masakari-processmonitor.conf"
 SCRIPT_CHECK_PROCESS="$SCRIPT_DIR/process_status_checker.sh"
 SCRIPT_COMMON_SH="$SCRIPT_DIR/common.sh"

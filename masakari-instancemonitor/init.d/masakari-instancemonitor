@@ -20,7 +20,7 @@
 . /lib/lsb/init-functions
 
 PROGNAME=masakari-instancemonitor
-PROG_DIR=/opt/masakari/masakari-instancemonitor
+PROG_DIR=/opt/masakari/instancemonitor
 PROG=$PROG_DIR/masakari-instancemonitor.py
 PIDFILE=/var/run/masakari-instancemonitor.pid
 PYTHON=/usr/bin/python
