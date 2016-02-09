@@ -28,7 +28,7 @@ binary-indep: build install
 	dh_testdir
 	dh_testroot
 	dh_installchangelogs -i
-	dh_installdeb 
+	dh_installdeb
 	dh_installdocs -i
 	dh_installdebconf -n
 	dh_install -i --sourcedir=.
@@ -37,9 +37,9 @@ binary-indep: build install
 	dh_shlibdeps -i
 	dh_md5sums -i
 	dh_gencontrol -i
-	dh_builddeb 
+	dh_builddeb
 
-#	dh_pysupport -d -i contain bug 
+#	dh_pysupport -d -i contain bug
 # Build architecture-dependent files here.
 binary-arch: build install
 # We have nothing to do by default.
