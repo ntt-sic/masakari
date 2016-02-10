@@ -185,6 +185,10 @@ class RecoveryControllerWorker(object):
         res = self.STATUS_NORMAL
 
         # For node accident.
+        # TODO(masa) Change value of recover_by to human readable string.
+        # In current implementation,
+        # recover_by == 0: host (hypervisor) goes down
+        # recover_by == 1: virtual machine intance goes down
         if recover_by == 0:
             if HA_Enabled == 'ON':
                 if vm_state == 'active' or \
@@ -221,43 +225,16 @@ class RecoveryControllerWorker(object):
             # Initalize status.
             status = self.STATUS_NORMAL
 
-            # Preparation recovery.
-            rc, rbody = self.rc_util_api.do_instance_reset(uuid, 'error')
-            if rc != '202':
-                rbody = json.loads(rbody)
-                msg = '%s(code:%s)' % (rbody.get('error').get(
-                    'message'), rbody.get('error').get('code'))
-                raise EnvironmentError(msg)
-
+            # Evacuate API only evacuates an instance in active, stop or error
+            # state. If an instance is in resized status, masakari resets the
+            # instance state to *error* to evacuate it.
             if vm_state == 'resized':
-                old_vm_state = self._select_old_vm_state(uuid)
-                if old_vm_state == 'stopped':
-                    # To change the vm_state to match the old_vm_state.
-                    self._update_vm_state(uuid, old_vm_state)
-
-                elif old_vm_state == 'active':
-                    # Consider AutoRecoverFlag ON. do nothing.
-                    self.rc_util.syslogout_ex("RecoveryControllerWorker_0011",
-                                              syslog.LOG_INFO)
-                    msg = "Consider AutoRecoverFlag ON."
-                    self.rc_util.syslogout(msg, syslog.LOG_INFO)
-                else:
-                    # Unexpected record.
-                    msg = "Do Nothing because select " \
-                          "instance_system_metadata result is unexpected."
-                    raise ValueError(msg)
-            elif vm_state == 'stopped':
-                self._update_vm_state(uuid, vm_state)
-
-            # Check task_state(Call nova show API).
-            vm_info = self._get_vm_param(uuid)
-            task_state = vm_info.get('OS-EXT-STS:task_state')
-
-            # It wants to record the task_state in the log.
-            msg = "%s of the tas_state is %s." % (uuid, task_state)
-            self.rc_util.syslogout_ex("RecoveryControllerWorker_0042",
-                                      syslog.LOG_INFO)
-            self.rc_util.syslogout_ex(msg, syslog.LOG_INFO)
+                rc, rbody = self.rc_util_api.do_instance_reset(uuid, 'error')
+                if rc != '202':
+                    rbody = json.loads(rbody)
+                    msg = '%s(code:%s)' % (rbody.get('error').get(
+                        'message'), rbody.get('error').get('code'))
+                    raise EnvironmentError(msg)
 
             # Execute recovery(Call nova evacuate API).
             rc, rbody = self.rc_util_api.do_instance_evacuate(
@@ -372,48 +349,31 @@ class RecoveryControllerWorker(object):
         status = self.STATUS_NORMAL
 
         try:
-            # Call nova reset-state API.
-            rc, rbody = self.rc_util_api.do_instance_reset(uuid, 'active')
+            if vm_state == 'stopped':
+                rc, rbody = self.rc_util_api.do_instance_reset(
+                    uuid, 'stopped')
+                if rc != '202':
+                    rbody = json.loads(rbody)
+                    msg = '%s(code:%s)' % (rbody.get('error').get(
+                        'message'), rbody.get('error').get('code'))
+                    raise EnvironmentError(msg)
+                return status
+
+            if vm_state == 'resized':
+                rc, rbody = self.rc_util_api.do_instance_reset(uuid, 'error')
+                if rc != '202':
+                    rbody = json.loads(rbody)
+                    msg = '%s(code:%s)' % (rbody.get('error').get(
+                        'message'), rbody.get('error').get('code'))
+                    raise EnvironmentError(msg)
+
+            # Call nova stop API.
+            rc, rbody = self.rc_util_api.do_instance_stop(uuid)
             if rc != '202':
                 rbody = json.loads(rbody)
                 msg = '%s(code:%s)' % (rbody.get('error').get(
                     'message'), rbody.get('error').get('code'))
                 raise EnvironmentError(msg)
-
-            # Call nova stop API.
-            rc, rbody = self.rc_util_api.do_instance_stop(uuid)
-            if rc != '202' and rc != '409':
-                rbody = json.loads(rbody)
-                msg = '%s(code:%s)' % (rbody.get('error').get(
-                    'message'), rbody.get('error').get('code'))
-                raise EnvironmentError(msg)
-            elif rc == '409':
-                rbody = json.loads(rbody)
-                return_message = rbody.get('conflictingRequest').get(
-                               'message')
-
-                ignore_message_list = []
-                ignore_message_list.append(
-                    "in vm_state stopped. "
-                    "Cannot stop while the instance "
-                    "is in this state.")
-                # kilo message
-                ignore_message_list.append(
-                    "while it is in vm_state stopped")
-
-                def msg_filter(return_message, ignore_message_list):
-                    #TODO(sampath):
-                    # Make this simple and opnestak version independet
-                    # This patch is to absorb the message diff in juno and kilo
-                    # juno message
-                    for ignore_message in ignore_message_list:
-                        if ignore_message in return_message:
-                            return True
-                    return False
-
-                if not msg_filter(return_message, ignore_message_list):
-                    msg = '%s(code:%s)' % (return_message, rc)
-                    raise EnvironmentError(msg)
 
             # Wait to be in the Stopped.
             conf_dic = self.rc_config.get_value('recover_starter')
@@ -434,13 +394,13 @@ class RecoveryControllerWorker(object):
                  msg = "vm_state did not become stopped."
                  raise EnvironmentError(msg)
 
-                # Call nova start API.
+            # Call nova start API.
             rc, rbody = self.rc_util_api.do_instance_start(uuid)
 
             if rc != '202' and rc != '409':
                 rbody = json.loads(rbody)
                 msg = '%s(code:%s)' % (rbody.get('error').get(
-                    'message'), rbody.get('error').get('code'))
+                        'message'), rbody.get('error').get('code'))
                 raise EnvironmentError(msg)
             elif rc == '409':
                 rbody = json.loads(rbody)
@@ -457,8 +417,10 @@ class RecoveryControllerWorker(object):
                     "while it is in vm_state active")
 
                 def msg_filter(return_message, ignore_message_list):
-                    #TODO(sampath)
-                    # see the previous comment for def msg_filter
+                    #TODO(sampath):
+                    # Make this simple and opnestak version independet
+                    # This patch is to absorb the message diff in juno and kilo
+                    # juno message
                     for ignore_message in ignore_message_list:
                         if ignore_message in return_message:
                             return True
@@ -634,55 +596,6 @@ class RecoveryControllerWorker(object):
                 db.close()
 
         return result
-
-    def _select_old_vm_state(self, uuid):
-        conf_db_dic = self.rc_config.get_value('db')
-        # Set target database.
-        local_conf_dic = {}
-        local_conf_dic['passwd'] = conf_db_dic['passwd']
-        local_conf_dic['host'] = conf_db_dic['host']
-        local_conf_dic['charset'] = conf_db_dic['charset']
-        local_conf_dic['name'] = 'nova'
-        local_conf_dic['user'] = conf_db_dic['user']
-
-        sql = "SELECT value FROM instance_system_metadata " \
-              "WHERE instance_uuid='%s' AND `key`='old_vm_state' " \
-              "order by created_at desc limit 1" % (uuid)
-
-        # Do sql.
-        sql_result = self._do_action_db(local_conf_dic, sql)
-
-        # Return old_vm_state.
-        if sql_result:
-            return sql_result.get('value')
-        else:
-            return None
-
-    def _update_vm_state(self, uuid, vm_state):
-        conf_db_dic = self.rc_config.get_value('db')
-        # Set target database.
-        local_conf_dic = {}
-        local_conf_dic['passwd'] = conf_db_dic['passwd']
-        local_conf_dic['host'] = conf_db_dic['host']
-        local_conf_dic['charset'] = conf_db_dic['charset']
-        local_conf_dic['name'] = 'nova'
-        local_conf_dic['user'] = conf_db_dic['user']
-
-        # Update instances table.
-        ## removed the task_state update to task_state=NULL from here
-        updated_at = datetime.datetime.now()
-        sql = "UPDATE instances SET vm_state='%s' , " \
-              "updated_at='%s' " \
-              "WHERE uuid='%s'" % (vm_state, updated_at, uuid)
-
-        self.rc_util.syslogout_ex("RecoveryControllerWorker_0028",
-                                  syslog.LOG_INFO)
-        msg = "Updated vm_state column of instances table. "\
-              "Query is \"%s\"" % sql
-        self.rc_util.syslogout(msg, syslog.LOG_INFO)
-
-        # Do sql.
-        self._do_action_db(local_conf_dic, sql)
 
     def host_maintenance_mode(self, notification_id, hostname,
                               update_progress):
