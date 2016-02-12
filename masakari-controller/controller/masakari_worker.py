@@ -349,6 +349,10 @@ class RecoveryControllerWorker(object):
         status = self.STATUS_NORMAL
 
         try:
+            # Idealy speaking, an instance fail notification isn't sent
+            # from instancemonitor if the instance is in stopped state
+            # since there is no instance on the hypervisor. However,
+            # in some race conditions, it could happen.
             if vm_state == 'stopped':
                 rc, rbody = self.rc_util_api.do_instance_reset(
                     uuid, 'stopped')

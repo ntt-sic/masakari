@@ -36,17 +36,19 @@ class RecoveryControllerConfig(object):
     This class to hold the values specified in the configuration file.
     """
 
-    def __init__(self):
+    def __init__(self, config_path=None):
         """
         Constructor:
         This constructor holds the values
         that are specified in the configuration file in the dictionary type
         for each section.
         """
-        self._get_option()
+        if not config_path:
+            config_path = '/etc/masakari/masakari-controller.conf'
 
-    def _get_option(self):
-        config_file_path = '/etc/masakari/masakari-controller.conf'
+        self._get_option(config_path)
+
+    def _get_option(self, config_file_path):
 
         inifile = ConfigParser.SafeConfigParser()
         inifile.read(config_file_path)
