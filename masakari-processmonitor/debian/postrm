@@ -1,9 +1,9 @@
 #! /bin/sh
-set -e 
+set -e
 ucf --purge /etc/masakari/masakari-processmonitor.conf
 ucf --purge /etc/masakari/proc.list
-dpkg-statoverride --remove /opt/masakari/masakari-processmonitor/common.sh
-dpkg-statoverride --remove /opt/masakari/masakari-processmonitor/nova_compute_reboot_before.sh
-dpkg-statoverride --remove /opt/masakari/masakari-processmonitor/process_status_checker.sh
-dpkg-statoverride --remove /opt/masakari/masakari-processmonitor/masakari-processmonitor.sh
+dpkg-statoverride --remove /opt/masakari/processmonitor/common.sh
+dpkg-statoverride --remove /opt/masakari/processmonitor/nova_compute_reboot_before.sh
+dpkg-statoverride --remove /opt/masakari/processmonitor/process_status_checker.sh
+dpkg-statoverride --remove /opt/masakari/processmonitor/masakari-processmonitor.sh
 exit 0

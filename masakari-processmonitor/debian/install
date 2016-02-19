@@ -1,4 +1,4 @@
-masakari-processmonitor opt/masakari
+processmonitor opt/masakari
 init/masakari-processmonitor.conf etc/init
 etc/masakari-processmonitor.conf.sample etc/masakari
 etc/proc.list.sample etc/masakari

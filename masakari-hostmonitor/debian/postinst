@@ -3,5 +3,5 @@ set -e
 ucf /etc/masakari/masakari-hostmonitor.conf.sample /etc/masakari/masakari-hostmonitor.conf
 LOG_DIR=/var/log/masakari
 if [ -z "`dpkg-statoverride --list ${LOG_DIR}`" ] ; then dpkg-statoverride --update --add openstack openstack 0755 ${LOG_DIR} ; fi
-dpkg-statoverride --update --add openstack openstack 0755 /opt/masakari/masakari-hostmonitor/masakari-hostmonitor.sh
+dpkg-statoverride --update --add openstack openstack 0755 /opt/masakari/hostmonitor/masakari-hostmonitor.sh
 exit 0

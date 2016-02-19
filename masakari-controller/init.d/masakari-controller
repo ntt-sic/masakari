@@ -21,7 +21,7 @@
 
 PROGNAME=masakari
 PROG_DIR=/opt/masakari
-PROG=$PROG_DIR/masakari-controller/masakari_controller.py
+PROG=$PROG_DIR/controller/masakari_controller.py
 PIDFILE=/var/run/masakari-controller.pid
 PYTHON=/usr/bin/python
 USER=openstack

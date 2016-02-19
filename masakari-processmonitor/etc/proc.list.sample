@@ -1,2 +1,2 @@
 01,/usr/sbin/libvirtd,sudo service libvirt-bin start,sudo service libvirt-bin start,,,,
-02,/usr/bin/python -u /opt/masakari/masakari-instancemonitor.py,sudo service masakari-instancemonitor start,sudo service masakari-instancemonitor start,,,,
+02,/usr/bin/python -u /opt/masakari/instancemonitor/masakari-instancemonitor.py,sudo service masakari-instancemonitor start,sudo service masakari-instancemonitor start,,,,

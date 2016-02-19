@@ -1,8 +1,8 @@
 #! /bin/sh
-set -e 
+set -e
 ucf --purge /etc/masakari/masakari-instancemonitor.conf
-dpkg-statoverride --remove /opt/masakari/masakari-instancemonitor/masakari-instancemonitor.py
-dpkg-statoverride --remove /opt/masakari/masakari-instancemonitor/libvirt_eventfilter.py
-dpkg-statoverride --remove /opt/masakari/masakari-instancemonitor/libvirt_eventfilter_table.py
-dpkg-statoverride --remove /opt/masakari/masakari-instancemonitor/libvirt_callback.py
+dpkg-statoverride --remove /opt/masakari/instancemonitor/masakari-instancemonitor.py
+dpkg-statoverride --remove /opt/masakari/instancemonitor/libvirt_eventfilter.py
+dpkg-statoverride --remove /opt/masakari/instancemonitor/libvirt_eventfilter_table.py
+dpkg-statoverride --remove /opt/masakari/instancemonitor/libvirt_callback.py
 exit 0
