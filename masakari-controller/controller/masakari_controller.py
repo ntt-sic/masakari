@@ -675,7 +675,9 @@ class RecoveryController(object):
 
         return flg
 
-
-if __name__ == '__main__':
+def main():
     rc = RecoveryController()
     rc.masakari()
+
+if __name__ == '__main__':
+    main()

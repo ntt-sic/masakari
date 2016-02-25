@@ -1,0 +1,10 @@
+include AUTHORS
+include ChangeLog
+include requirements.txt README
+recursive-include instancemonitor *.py
+recursive-include etc *
+recursive-include init.d *
+exclude .gitignore
+exclude .gitreview
+global-exclude *.pyc
+prune build

@@ -1,0 +1,94 @@
+Before run masakari-controller
+(1) DB setup
+
+ Masakari controller need access to db. If you have pre-configured db,
+then skip this step.
+
+Install mysql-server and setup.
+
+Ubuntu:
+sudo apt-get install mysql-server
+
+
+Centos 6 or before:
+(not tested)
+sudo yum install mysql-server
+
+Centos 7:
+Use MariaDB instead of MySQL. MariaDb is a open source equivalent to
+MySQL and can be installed with
+yum -y install mariadb-server mariadb
+Then,
+$mysql_secure_installation
+to configure it.
+
+If you need mysql, then add the mysql-community repo by,
+sudo rpm -Uvh http://dev.mysql.com/get/mysql-community-release-el7-5.noarch.rpm
+Or,
+wget http://repo.mysql.com/mysql-community-release-el7-5.noarch.rpm
+sudo rpm -ivh mysql-community-release-el7-5.noarch.rpm
+yum update
+and then you can install MySQLl like you normally do.
+sudo yum install mysql-server
+sudo systemctl start mysqld
+
+(2) Install basic requirements
+Install the basic python requirements,
+Ubuntu:
+sudo apt-get install python-setuptools python-devel
+
+CentOS:
+sudo yum install python-setuptools python-devel
+
+Install mysql-devel before install MySQLdb
+Ubuntu:
+sudo apt-get install mysql-devel
+CentOS:
+sudo  yum -y install  mysql-devel
+
+Ubuntu:
+sudo apt-get install build-essential
+
+CentOS:
+sudo yum groupinstall "Development tools"
+or
+sudo yum groupinstall -y development
+
+(3) Create db and tables
+All the tools you need to create the db and tables are in,
+masakari/masakari-controller/db/
+cd to dir,
+$cd masakari/masakari-controller/db/
+First, configure the db.conf
+---------------------------------------
+DB_USER=[db user name]
+DB_PASSWORD=[pwd for the user]
+DB_HOST=[fqdn or ip for the db server]
+---------------------------------------
+Then, this will create the db and required tables for masakari-controller
+$./create_database.sh
+
+(4) Setup
+Go to masakari/masakari-controller and,
+$sudo python setup.py install
+
+(5) 
+
+
+curl -O https://bootstrap.pypa.io/get-pip.py
+sudo python get-pip.py
+sudo yum -y install python-devel
+sudo pip install -e .
+
+Building host-monitor
+$sudo yum install rpm-build rpmdevtools
+
+rpmbuild --bb --buildroo [path to rpmbuild] SPECS/hostmonitor.spec
+
+
+#masakari instance-monitor
+sudo apt-get install pkg-config
+sudo apt-get install libvirt0 libvirt-dev
+
+tar czvf masakari-processmonitor.tar.gz masakari-processmonitor --exclude='masakari-processmonitor/debian' --exclude='masakari-processmonitor/rpmbuild'
+mv masakari-processmonitor.tar.gz masakari-processmonitor/rpmbuild/SOURCES/
