@@ -7,7 +7,6 @@
 .*.sw?
 AUTHORS
 Authors
-build/*
 ChangeLog
 cover/*
 dist/*
