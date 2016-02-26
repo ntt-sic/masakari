@@ -31,6 +31,7 @@ import traceback
 import datetime
 import socket
 import os
+import errno
 import traceback
 import logging
 from eventlet import greenthread
@@ -76,6 +77,17 @@ class RecoveryController(object):
             f = "%(asctime)s " + \
                 " masakari(%(process)d): %(levelname)s: %(message)s'"
             formatter = logging.Formatter(fmt=f, datefmt='%b %d %H:%M:%S')
+
+            # create log dir if not created
+            log_dir = '/var/log/masakari/'
+            try:
+                os.makedirs(log_dir)
+            except OSError as exc:
+                if exc.errno == errno.EEXIST and os.path.isdir(log_dir):
+                    pass
+                else:
+                    raise
+
             fh = logging.FileHandler(
                 filename='/var/log/masakari/masakari-controller.log')
             fh.setLevel(logging.ERROR)
