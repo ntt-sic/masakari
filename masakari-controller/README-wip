@@ -70,25 +70,16 @@ $./create_database.sh
 
 (4) Setup
 Go to masakari/masakari-controller and,
-$sudo python setup.py install
+$sudo pip install -e .
 
-(5) 
-
-
+If no pip, 
 curl -O https://bootstrap.pypa.io/get-pip.py
 sudo python get-pip.py
 sudo yum -y install python-devel
 sudo pip install -e .
 
-Building host-monitor
-$sudo yum install rpm-build rpmdevtools
-
-rpmbuild --bb --buildroo [path to rpmbuild] SPECS/hostmonitor.spec
 
 
 #masakari instance-monitor
 sudo apt-get install pkg-config
 sudo apt-get install libvirt0 libvirt-dev
-
-tar czvf masakari-processmonitor.tar.gz masakari-processmonitor --exclude='masakari-processmonitor/debian' --exclude='masakari-processmonitor/rpmbuild'
-mv masakari-processmonitor.tar.gz masakari-processmonitor/rpmbuild/SOURCES/
