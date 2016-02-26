@@ -28,7 +28,7 @@ mkdir -p $RPM_BUILD_ROOT/etc/init/
 install -m 755 processmonitor/*.sh $RPM_BUILD_ROOT/opt/masakari/processmonitor/
 install -m 755 etc/masakari-processmonitor.conf.sample $RPM_BUILD_ROOT/etc/masakari/
 install -m 755 etc/proc.list.sample $RPM_BUILD_ROOT/etc/masakari/
-install -m 755 init/masakari-processmonitor $RPM_BUILD_ROOT/etc/init/
+install -m 755 init/masakari-processmonitor.conf $RPM_BUILD_ROOT/etc/init/
 
 %clean
 rm -rf $RPM_BUILD_ROOT
@@ -36,7 +36,7 @@ rm -rf $RPM_BUILD_ROOT
 %files
 %defattr(-,root,root)
 /opt/masakari/processmonitor/*.sh
-/etc/init.d/masakari-processmonitor
+/etc/init/masakari-processmonitor.conf
 /etc/masakari/masakari-processmonitor.conf.sample
-
+/etc/masakari/proc.list.sample
 %changelog
