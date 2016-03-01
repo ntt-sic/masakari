@@ -5,7 +5,7 @@ Version: 1.0.0
 Release: 1
 License: ASL 2.0
 Group: System Environment/Daemons
-Source0: masakari-controller.tar.gz
+Source0: masakari-instancemonitor.tar.gz
 Url: https://github.com/ntt-sic/masakari
 BuildRoot: /var/tmp/%{name}-buildroot
 Vendor: NTT Software Innovation Center <openstack@lab.ntt.co.jp>
