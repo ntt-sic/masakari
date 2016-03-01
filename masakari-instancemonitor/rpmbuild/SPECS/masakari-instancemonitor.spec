@@ -24,13 +24,15 @@ python setup.py build
 %install
 mkdir -p $RPM_BUILD_ROOT/var/log/masakari/
 mkdir -p $RPM_BUILD_ROOT/etc/systemd/system/
+mkdir -p $RPM_BUILD_ROOT/etc/masakari/
 python setup.py install --single-version-externally-managed -O1 --root=$RPM_BUILD_ROOT --record=INSTALLED_FILES
 install -m 755 etc/systemd/system/masakari-instancemonitor.service $RPM_BUILD_ROOT/etc/systemd/system/
-
+install -m 755 etc/masakari-instancemonitor.conf.sample $RPM_BUILD_ROOT/etc/masakari/
 %clean
 rm -rf $RPM_BUILD_ROOT
 
 %files -f INSTALLED_FILES
 %defattr(-,root,root)
 /etc/systemd/system/
+/etc/masakari/
 %attr(755,openstack,openstack) /var/log/masakari/
