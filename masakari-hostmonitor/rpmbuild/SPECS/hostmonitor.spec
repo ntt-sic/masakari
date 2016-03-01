@@ -14,6 +14,7 @@ Packager: NTT Software Innovation Center <openstack@lab.ntt.co.jp>
 %description
 masakari hostmonitor for vmha
 
+%define debug_package %{nil}
 %prep
 
 %setup -n %{name}
@@ -24,10 +25,11 @@ masakari hostmonitor for vmha
 mkdir -p $RPM_BUILD_ROOT/etc/masakari/
 mkdir -p $RPM_BUILD_ROOT/opt/masakari/
 mkdir -p $RPM_BUILD_ROOT/opt/masakari/hostmonitor/
-mkdir -p $RPM_BUILD_ROOT/etc/init.d/
+mkdir -p $RPM_BUILD_ROOT/var/log/masakari/
+mkdir -p $RPM_BUILD_ROOT/etc/systemd/system/
 install -m 755 hostmonitor/masakari-hostmonitor.sh $RPM_BUILD_ROOT/opt/masakari/hostmonitor/
 install -m 755 etc/masakari-hostmonitor.conf.sample $RPM_BUILD_ROOT/etc/masakari/
-install -m 755 init.d/masakari-hostmonitor $RPM_BUILD_ROOT/etc/init.d/
+install -m 755 etc/systemd/system/masakari-hostmonitor.service $RPM_BUILD_ROOT/etc/systemd/system/
 
 %clean
 rm -rf $RPM_BUILD_ROOT
@@ -35,7 +37,8 @@ rm -rf $RPM_BUILD_ROOT
 %files
 %defattr(-,root,root)
 /opt/masakari/hostmonitor/masakari-hostmonitor.sh
-/etc/init.d/masakari-hostmonitor
+/etc/systemd/system/masakari-hostmonitor.service
 /etc/masakari/masakari-hostmonitor.conf.sample
+%attr(755,openstack,openstack) /var/log/masakari/
 
 %changelog
