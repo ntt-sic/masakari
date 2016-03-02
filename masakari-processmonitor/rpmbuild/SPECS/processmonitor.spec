@@ -39,9 +39,13 @@ rm -rf $RPM_BUILD_ROOT
 
 %files
 %defattr(-,root,root)
+%dir /opt/masakari/
 /opt/masakari/processmonitor/*.sh
+%dir /etc/masakari/
 /etc/masakari/masakari-processmonitor.conf.sample
 /etc/masakari/proc.list.sample
+%dir /etc/systemd/system/
 /etc/systemd/system/masakari-processmonitor.service
-%attr(755,openstack,openstack) /var/log/masakari/
+%dir %attr(755,openstack,openstack) /var/log/masakari/
+
 %changelog

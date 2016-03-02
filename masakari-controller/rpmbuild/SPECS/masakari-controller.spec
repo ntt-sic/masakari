@@ -25,7 +25,6 @@ python setup.py build
 mkdir -p $RPM_BUILD_ROOT/var/log/masakari/
 mkdir -p $RPM_BUILD_ROOT/etc/systemd/system/
 mkdir -p $RPM_BUILD_ROOT/etc/masakari/
-pip install -r requirements.txt
 python setup.py install --single-version-externally-managed -O1 --root=$RPM_BUILD_ROOT --record=INSTALLED_FILES
 install -m 664 etc/systemd/system/masakari-controller.service $RPM_BUILD_ROOT/etc/systemd/system/
 install -m 755 etc/masakari-controller.conf.sample $RPM_BUILD_ROOT/etc/masakari/
@@ -34,6 +33,8 @@ rm -rf $RPM_BUILD_ROOT
 
 %files -f INSTALLED_FILES
 %defattr(-,root,root)
-/etc/systemd/system/
-/etc/masakari/
-%attr(755,openstack,openstack) /var/log/masakari/
+%dir /etc/systemd/system/
+/etc/systemd/system/masakari-controller.service
+%dir /etc/masakari/
+/etc/masakari/masakari-controller.conf.sample
+%dir %attr(755,openstack,openstack) /var/log/masakari/

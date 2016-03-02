@@ -34,6 +34,8 @@ rm -rf $RPM_BUILD_ROOT
 
 %files -f INSTALLED_FILES
 %defattr(-,root,root)
-/etc/systemd/system/
-/etc/masakari/
-%attr(755,openstack,openstack) /var/log/masakari/
+%dir /etc/systemd/system/
+/etc/systemd/system/masakari-instancemonitor.service
+%dir /etc/masakari/
+/etc/masakari/masakari-instancemonitor.conf.sample
+%dir %attr(755,openstack,openstack) /var/log/masakari/

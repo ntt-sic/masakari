@@ -36,9 +36,12 @@ rm -rf $RPM_BUILD_ROOT
 
 %files
 %defattr(-,root,root)
+%dir /opt/masakari/
 /opt/masakari/hostmonitor/masakari-hostmonitor.sh
+%dir /etc/systemd/system/
 /etc/systemd/system/masakari-hostmonitor.service
+%dir /etc/masakari/
 /etc/masakari/masakari-hostmonitor.conf.sample
-%attr(755,openstack,openstack) /var/log/masakari/
+%dir %attr(755,openstack,openstack) /var/log/masakari/
 
 %changelog
