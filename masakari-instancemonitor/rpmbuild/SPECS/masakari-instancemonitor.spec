@@ -25,7 +25,6 @@ python setup.py build
 mkdir -p $RPM_BUILD_ROOT/var/log/masakari/
 mkdir -p $RPM_BUILD_ROOT/etc/systemd/system/
 mkdir -p $RPM_BUILD_ROOT/etc/masakari/
-pip install -r requirements.txt
 python setup.py install --single-version-externally-managed -O1 --root=$RPM_BUILD_ROOT --record=INSTALLED_FILES
 install -m 664 etc/systemd/system/masakari-instancemonitor.service $RPM_BUILD_ROOT/etc/systemd/system/
 install -m 755 etc/masakari-instancemonitor.conf.sample $RPM_BUILD_ROOT/etc/masakari/
