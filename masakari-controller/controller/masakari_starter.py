@@ -36,6 +36,7 @@ import masakari_config as config
 import masakari_util as util
 from eventlet import greenthread
 
+
 class RecoveryControllerStarter(object):
 
     """
@@ -94,7 +95,7 @@ class RecoveryControllerStarter(object):
                 delta = self._compare_timestamp(
                     datetime.datetime.now(), result_create_at)
                 if result_progress == 2 and \
-                delta <= long(interval_to_be_retry):
+                        delta <= long(interval_to_be_retry):
                     if result_retry_cnt < long(max_retry_cnt):
                         primary_id = self.rc_util_db.insert_vm_list_db(
                             cursor,
@@ -104,18 +105,19 @@ class RecoveryControllerStarter(object):
                         return primary_id
                     else:
                         # Not insert vm_list db.
-                        self.rc_util.syslogout_ex("RecoveryControllerStarter_0004",
-                                                  syslog.LOG_INFO)
+                        self.rc_util.syslogout_ex(
+                            "RecoveryControllerStarter_0004",
+                            syslog.LOG_INFO)
                         msg = "Do not insert a record" \
-                        + " into vm_list db because retry_cnt about " \
-                        + notification_uuid \
-                        + " is over " \
-                        + max_retry_cnt \
-                        + " times."
+                            + " into vm_list db because retry_cnt about " \
+                            + notification_uuid \
+                            + " is over " \
+                            + max_retry_cnt \
+                            + " times."
                         self.rc_util.syslogout(msg, syslog.LOG_INFO)
                         return None
                 elif result_progress == 2 and \
-                delta > long(interval_to_be_retry):
+                        delta > long(interval_to_be_retry):
                     primary_id = self.rc_util_db.insert_vm_list_db(
                         cursor, notification_id, notification_uuid, 0)
                     return primary_id
@@ -124,10 +126,10 @@ class RecoveryControllerStarter(object):
                     self.rc_util.syslogout_ex("RecoveryControllerStarter_0005",
                                               syslog.LOG_INFO)
                     msg = "Do not insert a record " \
-                    + "into vm_list db because progress of " \
-                    + notification_uuid \
-                    + " is " \
-                    + str(result_progress)
+                        + "into vm_list db because progress of " \
+                        + notification_uuid \
+                        + " is " \
+                        + str(result_progress)
                     self.rc_util.syslogout(msg, syslog.LOG_INFO)
                     return None
 
@@ -172,8 +174,8 @@ class RecoveryControllerStarter(object):
             self.rc_util_db.run_lock_query(table_name, cursor)
             # check duplication
             sql = ("SELECT * FROM vm_list"
-                  " WHERE uuid = '%s' AND (progress = 0 OR progress = 1)"
-                  " ORDER BY create_at DESC LIMIT 1") % (notification_uuid)
+                   " WHERE uuid = '%s' AND (progress = 0 OR progress = 1)"
+                   " ORDER BY create_at DESC LIMIT 1") % (notification_uuid)
 
             row_cnt = cursor.execute(sql)
 
@@ -371,7 +373,7 @@ class RecoveryControllerStarter(object):
                 if retry_mode is False:
                     sql = ("select * from reserve_list "
                            "where deleted=0 and hostname='%s' "
-                          ) % (recover_to)
+                           ) % (recover_to)
                     cnt = cursor.execute(sql)
 
                     if cnt == 0:
@@ -379,8 +381,8 @@ class RecoveryControllerStarter(object):
                                "where deleted=0 and cluster_port='%s' "
                                "and hostname!='%s' "
                                "order by create_at asc limit 1 for update"
-                              ) % (notification_cluster_port,
-                                   notification_hostname)
+                               ) % (notification_cluster_port,
+                                    notification_hostname)
                         cnt = cursor.execute(sql)
 
                         if cnt == 0:
@@ -405,7 +407,7 @@ class RecoveryControllerStarter(object):
                         sql = ("update notification_list "
                                "set update_at='%s', recover_to='%s' "
                                "where notification_id='%s'"
-                              ) % (update_at, recover_to, notification_id)
+                               ) % (update_at, recover_to, notification_id)
                         cursor.execute(sql)
 
                         self.rc_util.syslogout_ex(
@@ -443,7 +445,8 @@ class RecoveryControllerStarter(object):
 
                     if primary_id:
                         if retry_mode == True:
-                            # Skip recovery_instance thread. Will delegate to ...
+                            # Skip recovery_instance thread. Will delegate to
+                            # ...
                             msg = "RETRY MODE. Skip recovery_instance thread" \
                                 + " vm_uuide=" + vm_uuid \
                                 + " notification_id=" + notification_id
@@ -540,7 +543,8 @@ class RecoveryControllerStarter(object):
         notification_expiration_sec = int(conf_dict.get(
             'notification_expiration_sec'))
         now = datetime.datetime.now()
-        border_time = now - datetime.timedelta(seconds=notification_expiration_sec)
+        border_time = now - \
+            datetime.timedelta(seconds=notification_expiration_sec)
         border_time_str = border_time.strftime('%Y-%m-%d %H:%M:%S')
 
         sql = "SELECT id FROM vm_list " \
@@ -569,7 +573,7 @@ class RecoveryControllerStarter(object):
                       "delete_at = '%s' " \
                       "WHERE id = '%s'" \
                       % (4, datetime.datetime.now(),
-                        datetime.datetime.now(), row.get('id'))
+                         datetime.datetime.now(), row.get('id'))
                 self.rc_util.syslogout_ex("RecoveryControllerStarter_0036",
                                           syslog.LOG_INFO)
                 self.rc_util.syslogout('SQL=' + sql, syslog.LOG_INFO)
@@ -613,8 +617,8 @@ class RecoveryControllerStarter(object):
                           "SET progress = %d, update_at = '%s', " \
                           "delete_at = '%s' " \
                           "WHERE id = %s" \
-                           % (4, datetime.datetime.now(),
-                             datetime.datetime.now(), row2.get("id"))
+                        % (4, datetime.datetime.now(),
+                           datetime.datetime.now(), row2.get("id"))
                     self.rc_util.syslogout_ex("RecoveryControllerStarter_0039",
                                               syslog.LOG_INFO)
                     self.rc_util.syslogout("SQL=" + sql, syslog.LOG_INFO)
@@ -624,7 +628,6 @@ class RecoveryControllerStarter(object):
                 row_cnt += 1
 
         return return_value
-
 
     def handle_pending_instances(self):
         """
@@ -703,4 +706,3 @@ class RecoveryControllerStarter(object):
             for tb in tb_list:
                 self.rc_util.syslogout(tb, syslog.LOG_ERR)
             return
-

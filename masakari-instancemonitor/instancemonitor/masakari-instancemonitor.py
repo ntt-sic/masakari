@@ -47,6 +47,8 @@ def virEventLoopNativeRun():
         libvirt.virEventRunDefaultImpl()
 
 # Spawn a background thread to run the event loop
+
+
 def virEventLoopNativeStart():
     global eventLoopThread
     libvirt.virEventRegisterDefaultImpl()
@@ -59,32 +61,48 @@ def virEventLoopNativeStart():
 ##########################################################################
 # Define event callback function
 ##########################################################################
-def myDomainEventCallback (conn, dom, event, detail, opaque):
-    evf.virEventFilter(VIR_DOMAIN_EVENT_ID_LIFECYCLE, event, detail, dom.UUIDString())
+def myDomainEventCallback(conn, dom, event, detail, opaque):
+    evf.virEventFilter(VIR_DOMAIN_EVENT_ID_LIFECYCLE,
+                       event, detail, dom.UUIDString())
+
 
 def myDomainEventRebootCallback(conn, dom, opaque):
     evf.virEventFilter(VIR_DOMAIN_EVENT_ID_REBOOT, -1, -1, dom.UUIDString())
 
+
 def myDomainEventRTCChangeCallback(conn, dom, utcoffset, opaque):
-    evf.virEventFilter(VIR_DOMAIN_EVENT_ID_RTC_CHANGE, -1, -1, dom.UUIDString())
+    evf.virEventFilter(VIR_DOMAIN_EVENT_ID_RTC_CHANGE, -
+                       1, -1, dom.UUIDString())
+
 
 def myDomainEventWatchdogCallback(conn, dom, action, opaque):
-    evf.virEventFilter(VIR_DOMAIN_EVENT_ID_WATCHDOG, action, -1, dom.UUIDString())
+    evf.virEventFilter(VIR_DOMAIN_EVENT_ID_WATCHDOG,
+                       action, -1, dom.UUIDString())
+
 
 def myDomainEventIOErrorCallback(conn, dom, srcpath, devalias, action, opaque):
-    evf.virEventFilter(VIR_DOMAIN_EVENT_ID_IO_ERROR, action, -1, dom.UUIDString())
+    evf.virEventFilter(VIR_DOMAIN_EVENT_ID_IO_ERROR,
+                       action, -1, dom.UUIDString())
+
 
 def myDomainEventGraphicsCallback(conn, dom, phase, localAddr, remoteAddr, authScheme, subject, opaque):
-    evf.virEventFilter(VIR_DOMAIN_EVENT_ID_GRAPHICS, -1, phase, dom.UUIDString())
+    evf.virEventFilter(VIR_DOMAIN_EVENT_ID_GRAPHICS, -
+                       1, phase, dom.UUIDString())
+
 
 def myDomainEventDiskChangeCallback(conn, dom, oldSrcPath, newSrcPath, devAlias, reason, opaque):
-    evf.virEventFilter(VIR_DOMAIN_EVENT_ID_DISK_CHANGE, -1, -1, dom.UUIDString())
+    evf.virEventFilter(VIR_DOMAIN_EVENT_ID_DISK_CHANGE, -
+                       1, -1, dom.UUIDString())
+
 
 def myDomainEventIOErrorReasonCallback(conn, dom, srcPath, devAlias, action, reason, opaque):
-    evf.virEventFilter(VIR_DOMAIN_EVENT_ID_IO_ERROR_REASON, -1, -1, dom.UUIDString())
+    evf.virEventFilter(
+        VIR_DOMAIN_EVENT_ID_IO_ERROR_REASON, -1, -1, dom.UUIDString())
+
 
 def myDomainEventGenericCallback(conn, dom, opaque):
-    evf.virEventFilter(VIR_DOMAIN_EVENT_ID_CONTROL_ERROR, -1, -1, dom.UUIDString())
+    evf.virEventFilter(VIR_DOMAIN_EVENT_ID_CONTROL_ERROR, -
+                       1, -1, dom.UUIDString())
 
 
 #################################
@@ -102,7 +120,7 @@ def myDomainEventGenericCallback(conn, dom, opaque):
 #
 #################################
 def usage(out=sys.stderr):
-    print >>out, "usage: "+os.path.basename(sys.argv[0])+" [-hd] [uri]"
+    print >>out, "usage: " + os.path.basename(sys.argv[0]) + " [-hd] [uri]"
     print >>out, "   uri will default to qemu:///system"
     print >>out, "   --help, -h   Print this help message"
     print >>out, "   --debug, -d  Print debug output"
@@ -125,9 +143,10 @@ def usage(out=sys.stderr):
 #################################
 errno = None
 
+
 def errHandler(ctxt, err):
     global errno
-    #print "libvirt Error(%s)" % (err[2])
+    # print "libvirt Error(%s)" % (err[2])
     evf.warn_log(err[2])
     errno = err
 
@@ -159,31 +178,31 @@ def virtEvent(uri):
         # Event callback settings
         callback_ids = []
         cid = vc.domainEventRegisterAny(None, libvirt.VIR_DOMAIN_EVENT_ID_LIFECYCLE,
-                                              myDomainEventCallback, None)
+                                        myDomainEventCallback, None)
         callback_ids.append(cid)
         cid = vc.domainEventRegisterAny(None, libvirt.VIR_DOMAIN_EVENT_ID_REBOOT,
-                                              myDomainEventRebootCallback, None)
+                                        myDomainEventRebootCallback, None)
         callback_ids.append(cid)
         cid = vc.domainEventRegisterAny(None, libvirt.VIR_DOMAIN_EVENT_ID_RTC_CHANGE,
-                                              myDomainEventRTCChangeCallback, None)
+                                        myDomainEventRTCChangeCallback, None)
         callback_ids.append(cid)
         cid = vc.domainEventRegisterAny(None, libvirt.VIR_DOMAIN_EVENT_ID_IO_ERROR,
-                                              myDomainEventIOErrorCallback, None)
+                                        myDomainEventIOErrorCallback, None)
         callback_ids.append(cid)
         cid = vc.domainEventRegisterAny(None, libvirt.VIR_DOMAIN_EVENT_ID_WATCHDOG,
-                                              myDomainEventWatchdogCallback, None)
+                                        myDomainEventWatchdogCallback, None)
         callback_ids.append(cid)
         cid = vc.domainEventRegisterAny(None, libvirt.VIR_DOMAIN_EVENT_ID_GRAPHICS,
-                                              myDomainEventGraphicsCallback, None)
+                                        myDomainEventGraphicsCallback, None)
         callback_ids.append(cid)
         cid = vc.domainEventRegisterAny(None, libvirt.VIR_DOMAIN_EVENT_ID_DISK_CHANGE,
-                                              myDomainEventDiskChangeCallback, None)
+                                        myDomainEventDiskChangeCallback, None)
         callback_ids.append(cid)
         cid = vc.domainEventRegisterAny(None, libvirt.VIR_DOMAIN_EVENT_ID_IO_ERROR_REASON,
-                                              myDomainEventIOErrorReasonCallback, None)
+                                        myDomainEventIOErrorReasonCallback, None)
         callback_ids.append(cid)
         cid = vc.domainEventRegisterAny(None, libvirt.VIR_DOMAIN_EVENT_ID_CONTROL_ERROR,
-                                              myDomainEventGenericCallback, None)
+                                        myDomainEventGenericCallback, None)
         callback_ids.append(cid)
 
         # Connection monitoring.

@@ -130,7 +130,7 @@ class RecoveryControllerConfig(object):
         conf_recover_starter['api_check_max_cnt'] = inifile.get(
             'recover_starter', 'api_check_max_cnt')
         conf_recover_starter['notification_expiration_sec'] = \
-            inifile.get( 'recover_starter', 'notification_expiration_sec')
+            inifile.get('recover_starter', 'notification_expiration_sec')
 
         return conf_recover_starter
 

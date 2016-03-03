@@ -35,6 +35,7 @@ import threading
 import traceback
 from eventlet import greenthread
 
+
 class RecoveryControllerUtilDb(object):
 
     """
@@ -245,20 +246,25 @@ class RecoveryControllerUtilDb(object):
             self.rc_util.syslogout_ex("RecoveryControllerUtilDb_0006",
                                       syslog.LOG_INFO)
             cursor.execute(sql_operation, sql_values)
-            self.rc_util.syslogout("SQL=" + str(cursor._executed), syslog.LOG_INFO)
+            self.rc_util.syslogout(
+                "SQL=" + str(cursor._executed), syslog.LOG_INFO)
 
-            #cursor.execute(sql)
+            # cursor.execute(sql)
 
-            #self.rc_util.syslogout("MYSQL QUERY=" + str(cursor._executed), syslog.LOG_INFO)
+            # self.rc_util.syslogout(
+            #  "MYSQL QUERY=" + str(cursor._executed), syslog.LOG_INFO)
 
             sql = ("select * from reserve_list "
-                   "where deleted=0 and hostname='%s' for update") % (jsonData.get("hostname"))
+                   "where deleted=0 and hostname='%s' for update") % (
+                       jsonData.get("hostname"))
 
             cnt = cursor.execute(sql)
             if cnt > 0:
                 sql = ("update reserve_list "
                        "set deleted=1, delete_at='%s' "
-                       "where hostname='%s'") % (datetime.datetime.now(),jsonData.get("hostname"))
+                       "where hostname='%s'") % (
+                           datetime.datetime.now(),
+                           jsonData.get("hostname"))
                 cursor.execute(sql)
 
             ret_dic = {
@@ -323,7 +329,7 @@ class RecoveryControllerUtilDb(object):
             sql = ("select id,hostname from reserve_list "
                    "where deleted=0 and cluster_port='%s' and hostname!='%s' "
                    "order by create_at asc limit 1 for update"
-                  ) % (cluster_port, notification_hostname)
+                   ) % (cluster_port, notification_hostname)
 
             cnt = cursor.execute(sql)
             if cnt == 0:
@@ -361,8 +367,8 @@ class RecoveryControllerUtilDb(object):
         :param :notification_id: Notification ID
                 (updated narrowing condition of notification list table)
         """
-        ## TODO:
-        ## Get the cursor from Func Args and remove this MySQLdb.connect
+        # TODO:
+        # Get the cursor from Func Args and remove this MySQLdb.connect
         try:
             conf_db_dic = self.rc_config.get_value('db')
             # Connect db
@@ -539,7 +545,8 @@ class RecoveryControllerUtilDb(object):
             user = conf_db_dic.get("user")
             passwd = conf_db_dic.get("passwd")
             charset = conf_db_dic.get("charset")
-            innodb_lock_wait_timeout = conf_db_dic.get("innodb_lock_wait_timeout")
+            innodb_lock_wait_timeout = conf_db_dic.get(
+                "innodb_lock_wait_timeout")
 
             # Overwrite if specified
             if database_name:
@@ -681,7 +688,6 @@ class RecoveryControllerUtilDb(object):
             msg = 'Lock timeout retry count exceeded, giving up.'
             self.rc_util.syslogout(msg, syslog.LOG_ERR)
             raise MySQLdb.Error
-
 
 
 class RecoveryControllerUtilApi(object):
@@ -996,9 +1002,9 @@ class RecoveryControllerUtilApi(object):
 
         return response_code, rbody
 
-    ##TODO(sampath):
-    ##Use novaclient and omit this code
-    ##For now, imported this code from current release
+    # TODO(sampath):
+    # Use novaclient and omit this code
+    # For now, imported this code from current release
     def _get_x_subject_token(self, curl_response):
 
         x_subject_token = None
@@ -1014,9 +1020,9 @@ class RecoveryControllerUtilApi(object):
     def _get_body(self, curl_response):
         return curl_response[-1]
 
-    ##TODO(sampath):
-    ##Use novaclient and omit this code
-    ##For now, imported this code from current release
+    # TODO(sampath):
+    # Use novaclient and omit this code
+    # For now, imported this code from current release
     def _exe_curl(self, curl):
 
         conf_dic = self.rc_config.get_value('recover_starter')
@@ -1234,7 +1240,6 @@ class RecoveryControllerUtilApi(object):
 
         return nova_client_url, token, project_id, response_code
 
-
     def _get_detail(self,
                     nova_client_url,
                     nova_variable_url,
@@ -1421,9 +1426,8 @@ class RecoveryControllerUtil(object):
         :logOutLevel: Log output level
         """
         monitoring_message = str(threading.current_thread())\
-                           + " --MonitoringMessage--ID:[%s]" % (msgid)
+            + " --MonitoringMessage--ID:[%s]" % (msgid)
         self.syslogout(monitoring_message, logOutLevel)
-
 
     def syslogout(self, rawmsg, logOutLevel):
         """

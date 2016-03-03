@@ -27,9 +27,9 @@ import sys
 import json
 import datetime
 from eventlet import greenthread
-## TODO(sampath):
-## Delete this import if unused
-## conficlt with _do_action_db(self, config, sql):
+# TODO(sampath):
+# Delete this import if unused
+# conficlt with _do_action_db(self, config, sql):
 #import masakari_config as config
 import masakari_util as util
 
@@ -117,7 +117,7 @@ class RecoveryControllerWorker(object):
         return vm_info
 
     def _get_vmha_param(self, uuid, primary_id):
-        #TODO(sampath): remove unused 'uuid' form args
+        # TODO(sampath): remove unused 'uuid' form args
         try:
             # Get need recovery infomation.
             sql = "SELECT recover_by, recover_to " \
@@ -188,8 +188,8 @@ class RecoveryControllerWorker(object):
         if recover_by == 0:
             if HA_Enabled == 'ON':
                 if vm_state == 'active' or \
-                vm_state == 'stopped' or \
-                vm_state == 'resized':
+                        vm_state == 'stopped' or \
+                        vm_state == 'resized':
                     res = self._do_node_accident_vm_recovery(
                         uuid, vm_state, recover_to)
                 else:
@@ -264,10 +264,10 @@ class RecoveryControllerWorker(object):
                 uuid, evacuate_node)
 
             if rc != '200':
-                    rbody = json.loads(rbody)
-                    msg = '%s(code:%s)' % (rbody.get('error').get(
-                        'message'), rbody.get('error').get('code'))
-                    raise EnvironmentError(msg)
+                rbody = json.loads(rbody)
+                msg = '%s(code:%s)' % (rbody.get('error').get(
+                    'message'), rbody.get('error').get('code'))
+                raise EnvironmentError(msg)
 
         except EnvironmentError:
             self.rc_util.syslogout_ex("RecoveryControllerWorker_0013",
@@ -390,7 +390,7 @@ class RecoveryControllerWorker(object):
             elif rc == '409':
                 rbody = json.loads(rbody)
                 return_message = rbody.get('conflictingRequest').get(
-                               'message')
+                    'message')
 
                 ignore_message_list = []
                 ignore_message_list.append(
@@ -402,7 +402,7 @@ class RecoveryControllerWorker(object):
                     "while it is in vm_state stopped")
 
                 def msg_filter(return_message, ignore_message_list):
-                    #TODO(sampath):
+                    # TODO(sampath):
                     # Make this simple and opnestak version independet
                     # This patch is to absorb the message diff in juno and kilo
                     # juno message
@@ -431,8 +431,8 @@ class RecoveryControllerWorker(object):
                     greenthread.sleep(int(api_check_interval))
 
             if loop_cnt == int(api_check_max_cnt):
-                 msg = "vm_state did not become stopped."
-                 raise EnvironmentError(msg)
+                msg = "vm_state did not become stopped."
+                raise EnvironmentError(msg)
 
                 # Call nova start API.
             rc, rbody = self.rc_util_api.do_instance_start(uuid)
@@ -457,7 +457,7 @@ class RecoveryControllerWorker(object):
                     "while it is in vm_state active")
 
                 def msg_filter(return_message, ignore_message_list):
-                    #TODO(sampath)
+                    # TODO(sampath)
                     # see the previous comment for def msg_filter
                     for ignore_message in ignore_message_list:
                         if ignore_message in return_message:
@@ -515,7 +515,7 @@ class RecoveryControllerWorker(object):
             elif rc == '409':
                 rbody = json.loads(rbody)
                 return_message = rbody.get('conflictingRequest').get(
-                               'message')
+                    'message')
 
                 ignore_message_list = []
                 # juno
@@ -528,7 +528,7 @@ class RecoveryControllerWorker(object):
                     "while it is in vm_state stopped")
 
                 def msg_filter(return_message, ignore_message_list):
-                    #TODO(sampath)
+                    # TODO(sampath)
                     # see the previous comment for def msg_filter
                     for ignore_message in ignore_message_list:
                         if ignore_message in return_message:
@@ -570,7 +570,7 @@ class RecoveryControllerWorker(object):
         return status
 
     def _do_action_db(self, config, sql):
-        #TODO(sampath)
+        # TODO(sampath)
         # Remove this method and use sqlalchemy
         result = None
         db = None
@@ -669,7 +669,7 @@ class RecoveryControllerWorker(object):
         local_conf_dic['user'] = conf_db_dic['user']
 
         # Update instances table.
-        ## removed the task_state update to task_state=NULL from here
+        # removed the task_state update to task_state=NULL from here
         updated_at = datetime.datetime.now()
         sql = "UPDATE instances SET vm_state='%s' , " \
               "updated_at='%s' " \
@@ -770,10 +770,10 @@ class RecoveryControllerWorker(object):
 
             # Execute.
             status = self._execute_recovery(uuid,
-                                         exe_param.get("vm_state"),
-                                         exe_param.get("HA-Enabled"),
-                                         exe_param.get("recover_by"),
-                                         exe_param.get("recover_to"))
+                                            exe_param.get("vm_state"),
+                                            exe_param.get("HA-Enabled"),
+                                            exe_param.get("recover_by"),
+                                            exe_param.get("recover_to"))
 
         except EnvironmentError:
             self.rc_util.syslogout_ex("RecoveryControllerWorker_0034",
@@ -823,15 +823,17 @@ class RecoveryControllerWorker(object):
             try:
                 # Successful execution.
                 if status == self.STATUS_NORMAL:
-                    self.rc_util_db.update_vm_list_db('progress', 2, primary_id)
+                    self.rc_util_db.update_vm_list_db(
+                        'progress', 2, primary_id)
 
                 # Abnormal termination.
                 else:
-                    self.rc_util_db.update_vm_list_db('progress', 3, primary_id)
+                    self.rc_util_db.update_vm_list_db(
+                        'progress', 3, primary_id)
 
                 # Release semaphore
                 if sem:
-                   sem.release()
+                    sem.release()
 
             except MySQLdb.Error:
                 self.rc_util.syslogout_ex("RecoveryControllerWorker_0038",
@@ -853,4 +855,3 @@ class RecoveryControllerWorker(object):
                 for tb in tb_list:
                     self.rc_util.syslogout(tb, syslog.LOG_ERR)
                 return
-
