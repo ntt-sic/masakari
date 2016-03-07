@@ -17,14 +17,13 @@ Definition of interfaces to access database and helper methods
  to handle SQLAlchemy session
 """
 
-from sqlalchemy import create_engine, or_, asc
+from sqlalchemy import create_engine, or_
 from sqlalchemy.orm import sessionmaker
 from sqlalchemy.sql.expression import desc
-from sqlalchemy.orm import scoped_session
-from sqlalchemy import distinct
 from models import NotificationList, VmList, ReserveList
+from sqlalchemy import asc
 import controller.masakari_config as config
-
+from sqlalchemy.orm import scoped_session
 
 _SESSION = sessionmaker()
 
@@ -46,7 +45,6 @@ def get_engine():
 def get_session(engine):
     session_fac = sessionmaker(bind=engine)
     thread_local_session = scoped_session(session_fac)
-    # generate a session, which is not a thread safe object
     return thread_local_session()
 
 
@@ -79,34 +77,8 @@ def get_all_notification_list_by_hostname_with_rscgroup_type(
         filter_by(notification_type='rscGroup').all()
 
 
-def get_expired_notification_list(session, border_time_str):
-    # sql = "SELECT id FROM notification_list " \
-    #       "WHERE progress = 0 AND create_at < '%s'" \
-    #       % (border_time_str)
-    cnt = session.query(NotificationList).filter(
-        NotificationList.progress == 0,
-        NotificationList.create_at < border_time_str).all()
-    return cnt.id
-
-
-def delet_expired_notification(session, progress, update_at, delete_at, id):
-    # sql = "UPDATE notification_list " \
-    #       "SET progress = %d, update_at = '%s', delete_at = '%s' " \
-    #       "WHERE id = '%s'" \
-    #       % (4, datetime.datetime.now(),
-    #          datetime.datetime.now(), row.get("id"))
-    return session.query(NotificationList).\
-        filter_by(id=id).\
-        update({'progress': 4, 'update_at': update_at, 'delete_at': delete_at})
-
-
-def get_reprocessing_records_notifications(session):
-    # sql = "SELECT DISTINCT notification_uuid FROM notification_list " \
-    #       "WHERE progress = 0 AND recover_by = 1"
-    return session.query(NotificationList)
-
-
-def add_notification_list(session, create_at, update_at, delete_at, deleted,
+def add_notification_list(session, create_at, update_at,
+                          delete_at, deleted,
                           notification_id, notification_type,
                           notification_regionID, notification_hostname,
                           notification_uuid, notification_time,
@@ -170,8 +142,8 @@ def update_notification_list_by_notification_id_set_recover_to(
 def get_one_vm_list_by_uuid_create_at_last(session, uuid):
     # SELECT progress, create_at, retry_cnt FROM vm_list \
     #   WHERE uuid = :uuid ORDER BY create_at DESC LIMIT 1
-    return session.query(VmList).filter_by(uuid=uuid).\
-        order_by(desc(VmList.create_at)).first()
+    return session.query(VmList).filter_by(uuid=uuid).order_by(
+        desc(VmList.create_at)).first()
 
 
 def get_one_vm_list_by_uuid_and_progress_create_at_last(session,
@@ -179,19 +151,15 @@ def get_one_vm_list_by_uuid_and_progress_create_at_last(session,
     # SELECT * FROM vm_list WHERE uuid = :notification_uuid \
     #   AND (progress = 0 OR progress = 1) \
     #   ORDER BY create_at DESC LIMIT 1
-    return session.query(VmList).filter_by(uuid=notification_uuid).\
-        filter(or_(VmList.progress == 0, VmList.progress == 1)
-               ).order_by(desc(VmList.create_at)).first()
-
-
-def get_notification_uuid_list():
-    pass
+    return session.query(VmList).filter_by(uuid=notification_uuid).filter(
+        or_(VmList.progress == 0, VmList.progress == 1)).order_by(
+            desc(VmList.create_at)).first()
 
 
 def get_all_vm_list_by_progress(session):
     # SELECT uuid FROM vm_list WHERE progress = 0 or progress = 1
-    return session.query(VmList).\
-        filter(or_(VmList.progress == 0, VmList.progress == 1)).all()
+    return session.query(VmList).filter(
+        or_(VmList.progress == 0, VmList.progress == 1)).all()
 
 
 def update_vm_list_by_id(session, id, key, value):
@@ -217,16 +185,17 @@ def get_all_reserve_list_by_hostname_not_deleted(session, hostname):
         filter_by(deleted=0).all()
 
 
-def get_one_reserve_list_by_cluster_port_for_update(session,
-                                                    cluster_port, notification_hostname):
+def get_one_reserve_list_by_cluster_port_for_update(session, cluster_port,
+                                                    notification_hostname):
     # SELECT id,hostname FROM reserve_list
     #   WHERE deleted=0 and cluster_port=:cluster_port
     #   and hostname!=:notification_hostname
     #   ORDER by create_at asc limit 1 FOR UPDATE
-    return session.query(ReserveList).with_for_update().\
-        filter_by(deleted=0).filter_by(cluster_port=cluster_port).\
-        filter(ReserveList.hostname != notification_hostname).order_by(asc(ReserveList.create_at)).\
-        first()
+    return session.query(
+        ReserveList).with_for_update().filter_by(deleted=0).filter_by(
+        cluster_port=cluster_port).filter(
+            ReserveList.hostname != notification_hostname).order_by(
+                asc(ReserveList.create_at)).first()
 
 
 def update_reserve_list_by_hostname_as_deleted(session, hostname, delete_at):
