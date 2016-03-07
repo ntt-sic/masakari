@@ -22,8 +22,19 @@ from sqlalchemy.orm import sessionmaker
 from sqlalchemy.sql.expression import desc
 from models import NotificationList, VmList, ReserveList
 from sqlalchemy import asc
-import controller.masakari_config as config
 from sqlalchemy.orm import scoped_session
+from sqlalchemy import distinct
+import os
+import sys
+parentdir = os.path.abspath(os.path.join(os.path.dirname(__file__),
+                                         os.path.pardir))
+# rootdir = os.path.abspath(os.path.join(parentdir, os.path.pardir))
+# project root directory needs to be add at list head rather than tail
+# this file named 'masakari' conflicts to the directory name
+sys.path = [parentdir] + sys.path
+
+import controller.masakari_config as config
+
 
 _SESSION = sessionmaker()
 
@@ -211,3 +222,36 @@ def update_reserve_list_by_cluster_port_as_deleted(session, delete_at,
     #   WHERE cluster_port=:cluster_port
     return session.query(ReserveList).filter_by(cluster_port=cluster_port).\
         update({'delete_at': delete_at, 'deleted': 1})
+
+
+def get_old_records_notification(session, border_time):
+    # sql = "SELECT id FROM notification_list " \
+    #       "WHERE progress = 0 AND create_at < '%s'" \
+    #       % (border_time_str)
+    print ("type of create_at")
+    print type(NotificationList.create_at)
+    cnt = session.query(NotificationList).filter(
+        NotificationList.progress == 0,
+        NotificationList.create_at < border_time).all()
+    return cnt
+
+
+def delet_expired_notification(session, progress, update_at, delete_at, id):
+    # sql = "UPDATE notification_list " \
+    #       "SET progress = %d, update_at = '%s', delete_at = '%s' " \
+    #       "WHERE id = '%s'" \
+    #       % (4, datetime.datetime.now(),
+    #          datetime.datetime.now(), row.get("id"))
+    return session.query(NotificationList).filter_by(
+        id=id).update(
+            {'progress': 4, 'update_at': update_at, 'delete_at': delete_at}
+    )
+
+
+def get_reprocessing_records_list(session):
+    # sql = "SELECT DISTINCT notification_uuid FROM notification_list " \
+    #         "WHERE progress = 0 AND recover_by = 1"
+    cnt = session.query(
+        NotificationList.notification_uuid,).filter_by(progress=0).filter_by(
+        recover_by=1).distinct()
+    return cnt

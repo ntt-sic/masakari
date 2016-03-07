@@ -35,11 +35,19 @@ import traceback
 import logging
 from eventlet import greenthread
 
-import masakari_starter as starter
-from masakari_util import RecoveryControllerUtil as util
-from masakari_util import RecoveryControllerUtilDb as util_db
-import masakari_config as config
-import masakari_worker as worker
+parentdir = os.path.abspath(os.path.join(os.path.dirname(__file__),
+                                         os.path.pardir))
+# rootdir = os.path.abspath(os.path.join(parentdir, os.path.pardir))
+# project root directory needs to be add at list head rather than tail
+# this file named 'masakari' conflicts to the directory name
+sys.path = [parentdir] + sys.path
+
+import controller.masakari_starter as starter
+from controller.masakari_util import RecoveryControllerUtil as util
+from controller.masakari_util import RecoveryControllerUtilDb as util_db
+import controller.masakari_config as config
+import controller.masakari_worker as worker
+import db.api as dbapi
 
 
 class RecoveryController(object):
@@ -70,6 +78,8 @@ class RecoveryController(object):
             self.rc_util = util(self.rc_config)
             self.rc_util_db = util_db(self.rc_config)
             self.rc_worker = worker.RecoveryControllerWorker(self.rc_config)
+            self.db_engine = dbapi.get_engine()
+            self.session = dbapi.get_session(self.db_engine)
         except:
             logger = logging.getLogger()
             logger.setLevel(logging.ERROR)
@@ -113,15 +123,15 @@ class RecoveryController(object):
             self.rc_util.syslogout(
                 "masakari START.", syslog.LOG_INFO)
 
-            conn = None
-            cursor = None
-            # Get database session
-            conn, cursor = self.rc_util_db.connect_database()
+            # conn = None
+            # cursor = None
+            # # Get database session
+            # conn, cursor = self.rc_util_db.connect_database()
 
-            self._update_old_records_notification_list(conn, cursor)
+            self._update_old_records_notification_list(self.session)
             result = self._find_reprocessing_records_notification_list(
-                conn, cursor)
-            self.rc_util_db.disconnect_database(conn, cursor)
+                self.session)
+            # self.rc_util_db.disconnect_database(conn, cursor)
             preprocessing_count = len(result)
 
             if preprocessing_count > 0:
@@ -225,7 +235,7 @@ class RecoveryController(object):
                 self.rc_util.syslogout(tb, syslog.LOG_ERR)
             sys.exit()
 
-    def _update_old_records_notification_list(self, conn, cursor):
+    def _update_old_records_notification_list(self, session):
         # Get notification_expiration_sec from config
         conf_dict = self.rc_config.get_value('recover_starter')
         notification_expiration_sec = int(conf_dict.get(
@@ -235,45 +245,53 @@ class RecoveryController(object):
         # Get border time
         border_time = now - \
             datetime.timedelta(seconds=notification_expiration_sec)
-        border_time_str = border_time.strftime('%Y-%m-%d %H:%M:%S')
+        # border_time_str = border_time.strftime('%Y-%m-%d %H:%M:%S')
 
         # Set old record progress = 4
-        sql = "SELECT id FROM notification_list " \
-              "WHERE progress = 0 AND create_at < '%s'" \
-              % (border_time_str)
+        # sql = "SELECT id FROM notification_list " \
+        #       "WHERE progress = 0 AND create_at < '%s'" \
+        #       % (border_time_str)
         self.rc_util.syslogout_ex("RecoveryControllerl_0047", syslog.LOG_INFO)
-        self.rc_util.syslogout("SQL=" + sql, syslog.LOG_INFO)
-        cnt = cursor.execute(sql)
-        result = cursor.fetchall()
+        # self.rc_util.syslogout("SQL=" + sql, syslog.LOG_INFO)
+        # # cnt = cursor.execute(sql)
+        # # result = cursor.fetchall()
+        result = dbapi.get_old_records_notification(
+            self.session, border_time)
 
         for row in result:
-            sql = "UPDATE notification_list " \
-                  "SET progress = %d, update_at = '%s', delete_at = '%s' " \
-                  "WHERE id = '%s'" \
-                  % (4, datetime.datetime.now(),
-                     datetime.datetime.now(), row.get("id"))
-            self.rc_util.syslogout_ex(
-                "RecoveryControllerl_0048", syslog.LOG_INFO)
-            self.rc_util.syslogout("SQL=" + sql, syslog.LOG_INFO)
-            cursor.execute(sql)
-            conn.commit()
+            # sql = "UPDATE notification_list " \
+            #       "SET progress = %d, update_at = '%s', delete_at = '%s' " \
+            #       "WHERE id = '%s'" \
+            #       % (4, datetime.datetime.now(),
+            #          datetime.datetime.now(), row.get("id"))
+            # self.rc_util.syslogout_ex(
+            #     "RecoveryControllerl_0048", syslog.LOG_INFO)
+            # self.rc_util.syslogout("SQL=" + sql, syslog.LOG_INFO)
+            # cursor.execute(sql)
+            # conn.commit()
+            dbapi.delet_expired_notification(
+                self.session, 4,
+                datetime.datetime.now(),
+                datetime.datetime.now(),
+                row.id)
 
     def _find_reprocessing_records_notification_list(self, conn, cursor):
         return_value = []
 
         # Get list of notification_uuid
-        sql = "SELECT DISTINCT notification_uuid FROM notification_list " \
-              "WHERE progress = 0 AND recover_by = 1"
-        self.rc_util.syslogout_ex("RecoveryControllerl_0049", syslog.LOG_INFO)
-        self.rc_util.syslogout("SQL=" + sql, syslog.LOG_INFO)
-        cnt = cursor.execute(sql)
-        result = cursor.fetchall()
+        # sql = "SELECT DISTINCT notification_uuid FROM notification_list " \
+        #     "WHERE progress = 0 AND recover_by = 1"
+        # self.rc_util.syslogout_ex("RecoveryControllerl_0049", syslog.LOG_INFO)
+        # self.rc_util.syslogout("SQL=" + sql, syslog.LOG_INFO)
+        # cnt = cursor.execute(sql)
+        # result = cursor.fetchall()
+        result = dbapi.get_reprocessing_records_list(self.session)
 
         # Get reprocessing record
         for row in result:
             sql = "SELECT id, notification_id, notification_hostname, " \
-                  "notification_uuid, notification_cluster_port, recover_by " \
-                  "FROM notification_list " \
+                "notification_uuid, notification_cluster_port, recover_by " \
+                "FROM notification_list " \
                   "WHERE progress = 0 AND notification_uuid = '%s' " \
                   "ORDER BY create_at DESC, id DESC" \
                   % (row.get("notification_uuid"))
@@ -291,8 +309,8 @@ class RecoveryController(object):
                 else:
                     # Update progress
                     sql = "UPDATE notification_list " \
-                          "SET progress = %d , update_at = '%s', " \
-                          "delete_at = '%s' " \
+                        "SET progress = %d , update_at = '%s', " \
+                        "delete_at = '%s' " \
                           "WHERE id = '%s'" \
                         % (4, datetime.datetime.now(),
                            datetime.datetime.now(), row2.get("id"))
