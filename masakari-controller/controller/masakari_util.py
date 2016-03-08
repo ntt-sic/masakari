@@ -34,6 +34,13 @@ import syslog
 import threading
 import traceback
 from eventlet import greenthread
+# parentdir = os.path.abspath(os.path.join(os.path.dirname(__file__),
+#                                          os.path.pardir))
+# # rootdir = os.path.abspath(os.path.join(parentdir, os.path.pardir))
+# # project root directory needs to be add at list head rather than tail
+# # this file named 'masakari' conflicts to the directory name
+# sys.path = [parentdir] + sys.path
+import db.api as dbapi
 
 
 class RecoveryControllerUtilDb(object):
@@ -155,7 +162,7 @@ class RecoveryControllerUtilDb(object):
 
             raise
 
-    def insert_notification_list_db(self, jsonData, recover_by, cursor):
+    def insert_notification_list_db(self, jsonData, recover_by, session):
         """
            Insert into notification_list DB from notification JSON.
            :param :jsonData: notifocation json data.
@@ -165,23 +172,6 @@ class RecoveryControllerUtilDb(object):
                        notification_list table in the dictionary type
 
         """
-
-        columns = " (create_at, update_at, delete_at, deleted, " \
-            " notification_id, notification_type, " \
-            " notification_regionID, notification_hostname," \
-            " notification_uuid, notification_time," \
-            " notification_eventID, notification_eventType," \
-            " notification_detail, notification_startTime," \
-            " notification_endTime, notification_tzname, " \
-            " notification_daylight, notification_cluster_port," \
-            " progress, recover_by, " \
-            " iscsi_ip, controle_ip, " \
-            " recover_to)"
-
-        values = " VALUES " + \
-                 "(%s,%s,%s,%s,%s,%s,%s,%s," \
-                 "%s,%s,%s,%s,%s,%s,%s,\"%s\"," \
-                 "%s,%s,%s,%s,%s,%s,%s)"
 
         # NOTE: The notification item 'endTime' may have a NULL value.
         #       reference : The Notification Spec for RecoveryController.
@@ -225,29 +215,42 @@ class RecoveryControllerUtilDb(object):
                 recover_to = self._get_reserve_node_from_reserve_list_db(
                     jsonData.get("cluster_port"),
                     jsonData.get("hostname"),
-                    cursor)
+                    session)
 
                 # If reserve node is None, set progress 3.
                 if recover_to is None:
                     progress = 3
-            sql_operation = "INSERT INTO notification_list " + columns + values
-            sql_values = (
-                create_at, update_at, delete_at, deleted,
-                jsonData.get("id"), jsonData.get("type"),
-                jsonData.get("regionID"), jsonData.get("hostname"),
-                jsonData.get("uuid"), jsonData.get("time"),
-                jsonData.get("eventID"), jsonData.get("eventType"),
-                jsonData.get("detail"), jsonData.get("startTime"),
-                j_endTime, jsonData.get("tzname"),
-                jsonData.get("daylight"), jsonData.get("cluster_port"),
-                progress, recover_by, iscsi_ip, controle_ip, recover_to
+            result = dbapi.add_notification_list(
+                create_at=create_at,
+                update_at=update_at,
+                delete_at=delete_at,
+                deleted=deleted,
+                notification_id=jsonData.get("id"),
+                notification_type=jsonData.get("type"),
+                notification_regionID=jsonData.get("regionID"),
+                notification_hostname=jsonData.get("hostname"),
+                notification_uuid=jsonData.get("uuid"),
+                notification_time=jsonData.get("time"),
+                notification_eventID=jsonData.get("eventID"),
+                notification_eventType=jsonData.get("eventType"),
+                notification_detail=jsonData.get("detail"),
+                notification_startTime=jsonData.get("startTime"),
+                notification_endTime=j_endTime,
+                notification_tzname=jsonData.get("tzname"),
+                notification_daylight=jsonData.get("daylight"),
+                notification_cluster_port=jsonData.get("cluster_port"),
+                progress=progress,
+                recover_by=recover_by,
+                iscsi_ip=iscsi_ip,
+                controle_ip=controle_ip,
+                recover_to=recover_to
             )
 
             self.rc_util.syslogout_ex("RecoveryControllerUtilDb_0006",
                                       syslog.LOG_INFO)
-            cursor.execute(sql_operation, sql_values)
-            self.rc_util.syslogout(
-                "SQL=" + str(cursor._executed), syslog.LOG_INFO)
+            # cursor.execute(sql_operation, sql_values)
+            # self.rc_util.syslogout(
+            #    "SQL=" + str(cursor._executed), syslog.LOG_INFO)
 
             # cursor.execute(sql)
 
@@ -313,7 +316,7 @@ class RecoveryControllerUtilDb(object):
     def _get_reserve_node_from_reserve_list_db(self,
                                                cluster_port,
                                                notification_hostname,
-                                               cursor):
+                                               session):
         """
         Get reserve node, check it in use and change to 'enable'.
         :param: con_args: args database connection.
@@ -326,21 +329,27 @@ class RecoveryControllerUtilDb(object):
 
         try:
             # check it in use
-            sql = ("select id,hostname from reserve_list "
-                   "where deleted=0 and cluster_port='%s' and hostname!='%s' "
-                   "order by create_at asc limit 1 for update"
-                   ) % (cluster_port, notification_hostname)
+            # sql = ("select id,hostname from reserve_list "
+            #        "where deleted=0 and cluster_port='%s' and hostname!='%s' "
+            #        "order by create_at asc limit 1 for update"
+            #        ) % (cluster_port, notification_hostname)
 
-            cnt = cursor.execute(sql)
-            if cnt == 0:
+            # cnt = cursor.execute(sql)
+            # Todo(sampath): write the test codes
+            #                Check it
+            cnt = dbapi.get_one_reserve_list_by_cluster_port_for_update(
+                session,
+                cluster_port,
+                notification_hostname
+            )
+            if not cnt:
                 self.rc_util.syslogout_ex("RecoveryControllerUtilDb_0008",
                                           syslog.LOG_WARNING)
                 msg = "The reserve node not exist in reserve_list DB."
                 self.rc_util.syslogout(msg, syslog.LOG_WARNING)
                 hostname = None
             if cnt == 1:
-                reserves = cursor.fetchone()
-                hostname = reserves.get('hostname')
+                hostname = cnt.hostname
 
         except Exception as e:
 
@@ -526,93 +535,93 @@ class RecoveryControllerUtilDb(object):
 
             raise MySQLdb.Error
 
-    def connect_database(self, database_name=None):
-        """
-        Connect to database.
-        ### Caution ###
-        Closing should be carried out in another.
-        :param: database_name: connection target
-        :return :conn :connect object
-        :return :cursor :cursor object
-        """
-        try:
-            conn = None
-            cursor = None
-            # Get Config.
-            conf_db_dic = self.rc_config.get_value('db')
-            host = conf_db_dic.get("host")
-            db = conf_db_dic.get("name")
-            user = conf_db_dic.get("user")
-            passwd = conf_db_dic.get("passwd")
-            charset = conf_db_dic.get("charset")
-            innodb_lock_wait_timeout = conf_db_dic.get(
-                "innodb_lock_wait_timeout")
+    # def connect_database(self, database_name=None):
+    #     """
+    #     Connect to database.
+    #     ### Caution ###
+    #     Closing should be carried out in another.
+    #     :param: database_name: connection target
+    #     :return :conn :connect object
+    #     :return :cursor :cursor object
+    #     """
+    #     try:
+    #         conn = None
+    #         cursor = None
+    #         # Get Config.
+    #         conf_db_dic = self.rc_config.get_value('db')
+    #         host = conf_db_dic.get("host")
+    #         db = conf_db_dic.get("name")
+    #         user = conf_db_dic.get("user")
+    #         passwd = conf_db_dic.get("passwd")
+    #         charset = conf_db_dic.get("charset")
+    #         innodb_lock_wait_timeout = conf_db_dic.get(
+    #             "innodb_lock_wait_timeout")
 
-            # Overwrite if specified
-            if database_name:
-                db = database_name
+    #         # Overwrite if specified
+    #         if database_name:
+    #             db = database_name
 
-            # Connect database
-            conn = MySQLdb.connect(host=host,
-                                   db=db,
-                                   user=user,
-                                   passwd=passwd,
-                                   charset=charset
-                                   )
+    #         # Connect database
+    #         conn = MySQLdb.connect(host=host,
+    #                                db=db,
+    #                                user=user,
+    #                                passwd=passwd,
+    #                                charset=charset
+    #                                )
 
-            # Set cursor
-            cursor = conn.cursor(MySQLdb.cursors.DictCursor)
-            sql = "SET SESSION innodb_lock_wait_timeout = %s" \
-                  % (innodb_lock_wait_timeout)
-            cursor.execute(sql)
-            sql = "SET SESSION autocommit = 0"
-            cursor.execute(sql)
+    #         # Set cursor
+    #         cursor = conn.cursor(MySQLdb.cursors.DictCursor)
+    #         sql = "SET SESSION innodb_lock_wait_timeout = %s" \
+    #               % (innodb_lock_wait_timeout)
+    #         cursor.execute(sql)
+    #         sql = "SET SESSION autocommit = 0"
+    #         cursor.execute(sql)
 
-            return conn, cursor
+    #         return conn, cursor
 
-        except MySQLdb.Error:
-            self.rc_util.syslogout_ex("RecoveryControllerUtilDb_0022",
-                                      syslog.LOG_ERR)
-            error_type, error_value, traceback_ = sys.exc_info()
-            tb_list = traceback.format_tb(traceback_)
-            self.rc_util.syslogout(error_type, syslog.LOG_ERR)
-            self.rc_util.syslogout(error_value, syslog.LOG_ERR)
-            for tb in tb_list:
-                self.rc_util.syslogout(tb, syslog.LOG_ERR)
-            msg = "Exception : MySQLdb.Error in connection_database()."
-            self.rc_util.syslogout(msg, syslog.LOG_ERR)
+    #     except MySQLdb.Error:
+    #         self.rc_util.syslogout_ex("RecoveryControllerUtilDb_0022",
+    #                                   syslog.LOG_ERR)
+    #         error_type, error_value, traceback_ = sys.exc_info()
+    #         tb_list = traceback.format_tb(traceback_)
+    #         self.rc_util.syslogout(error_type, syslog.LOG_ERR)
+    #         self.rc_util.syslogout(error_value, syslog.LOG_ERR)
+    #         for tb in tb_list:
+    #             self.rc_util.syslogout(tb, syslog.LOG_ERR)
+    #         msg = "Exception : MySQLdb.Error in connection_database()."
+    #         self.rc_util.syslogout(msg, syslog.LOG_ERR)
 
-            if conn:
-                conn.close()
+    #         if conn:
+    #             conn.close()
 
-            raise MySQLdb.Error
+    #         raise MySQLdb.Error
 
-    def disconnect_database(self, conn, cursor):
-        """
-        Disconnect database.
-        :param: conn: connecting object
-        :param: cursor: cursor object
-        """
-        try:
-            if conn:
-                conn.commit()
-            if cursor:
-                cursor.close()
-            if conn:
-                conn.close()
-        except MySQLdb.Error:
-            self.rc_util.syslogout_ex("RecoveryControllerUtilDb_0023",
-                                      syslog.LOG_ERR)
-            error_type, error_value, traceback_ = sys.exc_info()
-            tb_list = traceback.format_tb(traceback_)
-            self.rc_util.syslogout(error_type, syslog.LOG_ERR)
-            self.rc_util.syslogout(error_value, syslog.LOG_ERR)
-            for tb in tb_list:
-                self.rc_util.syslogout(tb, syslog.LOG_ERR)
-            msg = "Exception : MySQLdb.Error in disconnection_database()."
-            self.rc_util.syslogout(msg, syslog.LOG_ERR)
+    # def disconnect_database(self, conn, cursor):
+    #     """
+    #     Disconnect database.
+    #     :param: conn: connecting object
+    #     :param: cursor: cursor object
+    #     """
+    #     try:
+    #         if conn:
+    #             conn.commit()
+    #         if cursor:
+    #             cursor.close()
+    #         if conn:
+    #             conn.close()
+    #     except MySQLdb.Error:
+    #         self.rc_util.syslogout_ex("RecoveryControllerUtilDb_0023",
+    #                                   syslog.LOG_ERR)
+    #         error_type, error_value, traceback_ = sys.exc_info()
+    #         tb_list = traceback.format_tb(traceback_)
+    #         self.rc_util.syslogout(error_type, syslog.LOG_ERR)
+    #         self.rc_util.syslogout(error_value, syslog.LOG_ERR)
+    #         for tb in tb_list:
+    #             self.rc_util.syslogout(tb, syslog.LOG_ERR)
+    #         msg = "Exception : MySQLdb.Error in disconnection_database()."
+    #         self.rc_util.syslogout(msg, syslog.LOG_ERR)
 
-            raise MySQLdb.Error
+    #         raise MySQLdb.Error
 
     def run_lock_query(self, table_name, cursor):
         """

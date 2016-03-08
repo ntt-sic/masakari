@@ -248,10 +248,64 @@ def delet_expired_notification(session, progress, update_at, delete_at, id):
     )
 
 
-def get_reprocessing_records_list(session):
+def get_reprocessing_records_list_distinct(session):
     # sql = "SELECT DISTINCT notification_uuid FROM notification_list " \
     #         "WHERE progress = 0 AND recover_by = 1"
     cnt = session.query(
         NotificationList.notification_uuid,).filter_by(progress=0).filter_by(
         recover_by=1).distinct()
+    return cnt
+
+
+def get_reprocessing_records_list(session, notification_uuid):
+    # sql = "SELECT id, notification_id, notification_hostname, "
+    # "notification_uuid, notification_cluster_port, recover_by "
+    # "FROM notification_list "
+    # "WHERE progress = 0 AND notification_uuid = '%s' "
+    # "ORDER BY create_at DESC, id DESC"
+    # % (row.get("notification_uuid"))
+    cnt = session.query(NotificationList).filter_by(
+        progress=0).filter_by(notification_uuid=notification_uuid).order_by(
+            desc(NotificationList.create_at),
+            desc(NotificationList.id))
+    return cnt
+
+
+def get_notification_list_by_hostname(session, notification_hostname):
+    # sql = "SELECT id, notification_id, notification_hostname, "
+    # "notification_uuid, notification_cluster_port, recover_by "
+    # "FROM notification_list "
+    # "WHERE progress = 0 AND notification_hostname = '%s' "
+    # "ORDER BY create_at DESC, id DESC"
+    # % ("notification_hostname")
+    cnt = session.query(NotificationList).filter_by(progress=0).filter_by(
+        notification_hostname=notification_hostname).order_by(
+        desc(NotificationList.create_at),
+        desc(NotificationList.id))
+    return cnt
+
+
+def update_reprocessing_records(
+        session, progress, update_at, delete_at, id):
+    # sql = "UPDATE notification_list "
+    # "SET progress = %d , update_at = '%s', "
+    # "delete_at = '%s' "
+    # "WHERE id = '%s'"
+    # % (4, datetime.datetime.now(),datetime.datetime.now(), row2.get("id"))
+    cnt = session.query(NotificationList).filter_by(id=id).update(
+        {
+            'progress': progress,
+            'update_at': update_at,
+            'delete_at': delete_at
+        }
+    )
+    return cnt
+
+
+def get_notification_list_distinct_hostname(session):
+    # sql = "SELECT DISTINCT notification_hostname FROM notification_list " \
+    #         "WHERE progress = 0 AND recover_by = 0"
+    cnt = session.query(NotificationList.notification_hostname,
+                        ).filter_by(progress=0).filter_by(
+                            recover_by=0).distinct()
     return cnt
