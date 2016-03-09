@@ -22,7 +22,6 @@ import ConfigParser
 import datetime
 import json
 import logging
-import MySQLdb
 import os
 import paramiko
 import re
@@ -34,12 +33,13 @@ import syslog
 import threading
 import traceback
 from eventlet import greenthread
+from sqlalchemy import exc
 # parentdir = os.path.abspath(os.path.join(os.path.dirname(__file__),
 #                                          os.path.pardir))
 # # rootdir = os.path.abspath(os.path.join(parentdir, os.path.pardir))
 # # project root directory needs to be add at list head rather than tail
 # # this file named 'masakari' conflicts to the directory name
-# sys.path = [parentdir] + sys.path
+# sys.path=[parentdir] + sys.path
 import db.api as dbapi
 
 
@@ -70,7 +70,7 @@ class RecoveryControllerUtilDb(object):
 
         try:
             sql = "SELECT recover_to, recover_by FROM notification_list " \
-                  "WHERE notification_id = '%s'" % (notification_id)
+                "WHERE notification_id = '%s'" % (notification_id)
 
             cursor.execute(sql)
             result = cursor.fetchone()
@@ -130,8 +130,7 @@ class RecoveryControllerUtilDb(object):
 
             raise KeyError
 
-        except MySQLdb.Error:
-
+        except exc.SQLAlchemyError:
             self.rc_util.syslogout_ex("RecoveryControllerUtilDb_0003",
                                       syslog.LOG_ERR)
             error_type, error_value, traceback_ = sys.exc_info()
@@ -141,10 +140,10 @@ class RecoveryControllerUtilDb(object):
             for tb in tb_list:
                 self.rc_util.syslogout(tb, syslog.LOG_ERR)
 
-            msg = "Exception : MySQLdb.Error in insert_vm_list_db()."
+            msg = "Exception : sqlalchemy error in insert_vm_list_db()."
             self.rc_util.syslogout(msg, syslog.LOG_ERR)
 
-            raise MySQLdb.Error
+            raise exc.SQLAlchemyError
 
         except:
             self.rc_util.syslogout_ex("RecoveryControllerUtilDb_0004",
@@ -175,24 +174,33 @@ class RecoveryControllerUtilDb(object):
 
         # NOTE: The notification item 'endTime' may have a NULL value.
         #       reference : The Notification Spec for RecoveryController.
-        if jsonData.get("endTime"):
-            j_endTime = None
-        else:
-            j_endTime = jsonData.get("endTime")
-        # update and deleted :not yet
-        create_at = datetime.datetime.now()
-        update_at = None
-        delete_at = None
-        deleted = 0
-        # progress 0:not yet
-        progress = 0
-        # From /etc/hosts
-        # NOTE: Hosts hostname suffix is
-        # undetermined("_data_line","_control_line")
+
         try:
+            if jsonData.get("endTime"):
+                j_endTime = None
+            else:
+                j_endTime = jsonData.get("endTime")
+            # update and deleted :not yet
+            create_at = datetime.datetime.now()
+            update_at = None
+            delete_at = None
+            deleted = 0
+            # progress 0:not yet
+            progress = 0
+            # From /etc/hosts
+            # NOTE: Hosts hostname suffix is
+            # undetermined("_data_line","_control_line")
             iscsi_ip = None
-            controle_ip = socket.gethostbyname(
-                jsonData.get("hostname"))
+            controle_ip = socket.gethostbyname(jsonData.get("hostname"))
+            recover_to = None
+            if recover_by == 0:
+                recover_to = self._get_reserve_node_from_reserve_list_db(
+                    jsonData.get("cluster_port"),
+                    jsonData.get("hostname"),
+                    session)
+                # If reserve node is None, set progress 3.
+                if recover_to is None:
+                    progress = 3
         except Exception as e:
 
             self.rc_util.syslogout_ex("RecoveryControllerUtilDb_0005",
@@ -207,19 +215,9 @@ class RecoveryControllerUtilDb(object):
             self.rc_util.syslogout(e.message, syslog.LOG_ERR)
 
             raise e
-
+        # Todo: (sampath) correct the exceptions catching
         # Insert to notification_list DB.
         try:
-            recover_to = None
-            if recover_by == 0:
-                recover_to = self._get_reserve_node_from_reserve_list_db(
-                    jsonData.get("cluster_port"),
-                    jsonData.get("hostname"),
-                    session)
-
-                # If reserve node is None, set progress 3.
-                if recover_to is None:
-                    progress = 3
             result = dbapi.add_notification_list(
                 create_at=create_at,
                 update_at=update_at,
@@ -257,18 +255,35 @@ class RecoveryControllerUtilDb(object):
             # self.rc_util.syslogout(
             #  "MYSQL QUERY=" + str(cursor._executed), syslog.LOG_INFO)
 
-            sql = ("select * from reserve_list "
-                   "where deleted=0 and hostname='%s' for update") % (
-                       jsonData.get("hostname"))
+            # sql = ("select * from reserve_list "
+            #        "where deleted=0 and hostname='%s' for update") % (
+            #     jsonData.get("hostname"))
+            cnt = dbapi.get_all_reserve_list_by_hostname_not_deleted(
+                session,
+                jsonData.get("hostname")
+            )
 
-            cnt = cursor.execute(sql)
-            if cnt > 0:
-                sql = ("update reserve_list "
-                       "set deleted=1, delete_at='%s' "
-                       "where hostname='%s'") % (
-                           datetime.datetime.now(),
-                           jsonData.get("hostname"))
-                cursor.execute(sql)
+            # cnt = cursor.execute(sql)
+            if len(cnt) > 0:
+                # sql = ("update reserve_list "
+                #        "set deleted=1, delete_at='%s' "
+                #        "where hostname='%s'") % (
+                #     datetime.datetime.now(),
+                #     jsonData.get("hostname"))
+                # cursor.execute(sql)
+
+                # Todo: (sampath) This query set deleted=1 for all
+                # records and update the delete_at time stamp to
+                # current time. Since, only filter hostname == hostname
+                # previously deleted record's delte_at also set to
+                # current time stamp. Here should look for
+                # hostname == hostname && deleted != 0
+                # and update the deleted=1
+                dbapi.update_reserve_list_by_hostname_as_deleted(
+                    session,
+                    jsonData.get("hostname"),
+                    datetime.datetime.now()
+                )
 
             ret_dic = {
                 "create_at": create_at,
@@ -330,7 +345,8 @@ class RecoveryControllerUtilDb(object):
         try:
             # check it in use
             # sql = ("select id,hostname from reserve_list "
-            #        "where deleted=0 and cluster_port='%s' and hostname!='%s' "
+            #        "where deleted=0 and cluster_port='%s'"
+            #        " and hostname!='%s' "
             #        "order by create_at asc limit 1 for update"
             #        ) % (cluster_port, notification_hostname)
 
@@ -348,7 +364,7 @@ class RecoveryControllerUtilDb(object):
                 msg = "The reserve node not exist in reserve_list DB."
                 self.rc_util.syslogout(msg, syslog.LOG_WARNING)
                 hostname = None
-            if cnt == 1:
+            if not isinstance(cnt, (list, tuple)):
                 hostname = cnt.hostname
 
         except Exception as e:
@@ -398,15 +414,15 @@ class RecoveryControllerUtilDb(object):
             now = datetime.datetime.now()
             if key == 'progress':
                 sql = "UPDATE notification_list " \
-                      "SET progress = %s, update_at = '%s', " \
-                      "delete_at = '%s' " \
+                    "SET progress = %s, update_at = '%s', " \
+                    "delete_at = '%s' " \
                       "WHERE notification_id = '%s'" \
                       % (value, now, now, notification_id)
             # Updated than progress
             else:
                 sql = "UPDATE notification_list SET %s = '%s', " \
-                      "update_at = '%s' " \
-                      "WHERE notification_id = '%s'" \
+                    "update_at = '%s' " \
+                    "WHERE notification_id = '%s'" \
                       % (key, value, now, notification_id)
 
             self.rc_util.syslogout_ex("RecoveryControllerUtilDb_0011",
@@ -481,20 +497,20 @@ class RecoveryControllerUtilDb(object):
             now = datetime.datetime.now()
             if key == 'progress' and value == 1:
                 sql = "UPDATE vm_list " \
-                      "SET progress = %s, update_at = '%s' " \
-                      "WHERE id = '%s'" \
+                    "SET progress = %s, update_at = '%s' " \
+                    "WHERE id = '%s'" \
                       % (value, now, primary_id)
             # End the progress([success:2][error:3][skipped old:4])
             elif key == 'progress':
                 sql = "UPDATE vm_list " \
-                      "SET progress = %s, " \
-                      "update_at = '%s', delete_at = '%s' " \
+                    "SET progress = %s, " \
+                    "update_at = '%s', delete_at = '%s' " \
                       "WHERE id = '%s'" \
                       % (value, now, now, primary_id)
             # Update than progress
             else:
                 sql = "UPDATE vm_list SET %s = '%s' WHERE id = '%s'" \
-                      % (key, value, primary_id)
+                    % (key, value, primary_id)
 
             cursor.execute(sql)
 
@@ -1137,7 +1153,7 @@ class RecoveryControllerUtilApi(object):
                 api_retry_cnt_exec_api <= api_max_retry_cnt:
 
             # I get a token of admin.
-            nova_client_url, token, project_id, response_code \
+            nova_client_url, token, project_id, response_code\
                 = self._get_token_admin(auth_url,
                                         domain,
                                         admin_user,
@@ -1147,7 +1163,7 @@ class RecoveryControllerUtilApi(object):
             # Get the admintoken by the project_id in scope in the case of
             # non-GET
             if nova_curl_method != "GET":
-                nova_client_url, response_code, rbody \
+                nova_client_url, response_code, rbody\
                     = self._get_detail(nova_client_url,
                                        nova_variable_url,
                                        token)
@@ -1161,7 +1177,7 @@ class RecoveryControllerUtilApi(object):
                     else:
                         continue
 
-                nova_client_url, token, project_id, response_code \
+                nova_client_url, token, project_id, response_code\
                     = self._get_token_project_scope(auth_url,
                                                     domain,
                                                     admin_user,
@@ -1169,7 +1185,7 @@ class RecoveryControllerUtilApi(object):
                                                     project_id)
 
             # Run the Objective curl
-            response_code, rbody \
+            response_code, rbody\
                 = self._run_curl_objective(nova_curl_method,
                                            nova_client_url,
                                            nova_variable_url,
@@ -1197,8 +1213,8 @@ class RecoveryControllerUtilApi(object):
         # Make curl for get token.
         token_url = "%s/v3/auth/tokens" % (auth_url)
         token_body = "{ \"auth\": { \"identity\": { \"methods\": " \
-                     "[ \"password\" ], \"password\": { \"user\":" \
-                     "{ \"domain\": { \"name\": \"%s\" }, \"name\": " \
+            "[ \"password\" ], \"password\": { \"user\":" \
+            "{ \"domain\": { \"name\": \"%s\" }, \"name\": " \
                      "\"%s\", \"password\": \"%s\" } } }, \"scope\": " \
                      "{ \"project\": { \"domain\": { \"name\": \"%s\" }, " \
                      "\"name\": \"%s\"} } } }" \
@@ -1206,8 +1222,8 @@ class RecoveryControllerUtilApi(object):
                         project_name)
 
         token_curl = "curl " \
-                     "-i '%s' -X POST -H \"Accept: application/json\" " \
-                     "-H \"Content-Type: application/json\" -d '%s'" \
+            "-i '%s' -X POST -H \"Accept: application/json\" " \
+            "-H \"Content-Type: application/json\" -d '%s'" \
                      % (token_url,
                         token_body)
 
@@ -1262,8 +1278,8 @@ class RecoveryControllerUtilApi(object):
             nova_client_url = "%s%s" % (nova_client_url, "/servers/detail")
 
         nova_client_curl = "curl " \
-                           "-i \"%s\" -X GET " \
-                           "-H \"Accept: application/json\" " \
+            "-i \"%s\" -X GET " \
+            "-H \"Accept: application/json\" " \
                            "-H \"Content-Type: application/json\" " \
                            "-H \"X-Auth-Token: %s\"" \
                            % (nova_client_url, token)
@@ -1315,15 +1331,15 @@ class RecoveryControllerUtilApi(object):
         # Make curl for get token.
         token_url = "%s/v3/auth/tokens" % (auth_url)
         token_body = "{ \"auth\": { \"identity\": { \"methods\": " \
-                     "[ \"password\" ], \"password\": { \"user\": " \
-                     "{ \"domain\": { \"name\": \"%s\" }, \"name\": \"%s\", " \
+            "[ \"password\" ], \"password\": { \"user\": " \
+            "{ \"domain\": { \"name\": \"%s\" }, \"name\": \"%s\", " \
                      "\"password\": \"%s\" } } }, \"scope\": { \"project\": " \
                      "{ \"id\": \"%s\"} } } }" \
                      % (domain, admin_user, admin_password, project_id)
 
         token_curl = "curl " \
-                     "-i '%s' -X POST -H \"Accept: application/json\" " \
-                     "-H \"Content-Type: application/json\" -d '%s'" \
+            "-i '%s' -X POST -H \"Accept: application/json\" " \
+            "-H \"Content-Type: application/json\" -d '%s'" \
                      % (token_url, token_body)
 
         # Get token id.
@@ -1377,8 +1393,8 @@ class RecoveryControllerUtilApi(object):
             nova_client_url = "%s%s" % (nova_client_url, nova_variable_url)
 
         nova_client_curl = "curl " \
-                           "-i \"%s\" -X %s -H \"Content-Type: " \
-                           "application/json\" -H \"X-Auth-Token: %s\"" \
+            "-i \"%s\" -X %s -H \"Content-Type: " \
+            "application/json\" -H \"X-Auth-Token: %s\"" \
                            % (nova_client_url, nova_curl_method, token)
 
         if nova_body is not None:

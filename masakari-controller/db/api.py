@@ -129,6 +129,7 @@ def add_notification_list(session, create_at, update_at,
         progress=progress, recover_by=recover_by, iscsi_ip=iscsi_ip,
         controle_ip=controle_ip, recover_to=recover_to)
     session.add(notification_list)
+    session.commit()
     return notification_list
 
 
@@ -187,6 +188,7 @@ def add_vm_list(session, create_at, deleted, uuid, progress, retry_cnt,
                      notification_id=notification_id, recover_to=recover_to,
                      recover_by=recover_by)
     session.add(vm_list)
+    session.commit()
     return vm_list
 
 

@@ -37,14 +37,18 @@ class sqlalchemyTest(object):
         self.Session.add(vm_list)
         return vm_list
 
-    def addtoReserveList(self, create_at, deleted,
-                         cluster_port, hostname):
+    def addtoReserveList(self, **kwargs):
+        create_at = kwargs.pop('create_at', datetime.datetime.now())
+        deleted = kwargs.pop('deleted', 0)
+        cluster_port = kwargs.pop('cluster_port', "655")
+        hostname = kwargs.pop('hostname', "compute01")
         reslist = ReserveList(
             create_at=create_at,
             deleted=deleted,
             cluster_port=cluster_port,
             hostname=hostname)
         self.Session.add(reslist)
+        self.Session.commit()
         return reslist
 
     def addtoNotificationList(self, **kwargs):
@@ -320,6 +324,54 @@ class sqlalchemyTest(object):
         if flg == 0:
             print "OK"
 
+    def test_get_one_reserve_list_by_cluster_port_for_update(self):
+        rec1 = self.addtoReserveList(
+            cluster_port="22222", hostname="testhost")
+        rec2 = self.addtoReserveList(
+            cluster_port="22222", hostname="notifyhost")
+        res = dbapi.get_one_reserve_list_by_cluster_port_for_update(
+            self.Session,
+            22222,
+            "notifyhost"
+        )
+        if rec1 is res:
+            print "OK"
+        elif rec2 is res:
+            print "ERROR"
+        else:
+            print "ERROR"
+
+        if not isinstance(res, (list, tuple)):
+            print "OK"
+            print res.hostname
+            print res.cluster_port
+            print res.id
+        else:
+            print "ERROR"
+
+    def test_get_all_reserve_list_by_hostname_not_deleted(self):
+        rec1 = self.addtoReserveList(hostname="testhost")
+        rec2 = self.addtoReserveList(hostname="testhost")
+        res = dbapi.get_all_reserve_list_by_hostname_not_deleted(
+            self.Session,
+            "testhost"
+        )
+        if rec1 in res and rec2 in res:
+            print "OK"
+        else:
+            print "ERROR"
+
+    def test_update_reserve_list_by_hostname_as_deleted(self):
+        rec1 = self.addtoReserveList(hostname="testhost")
+        rec2 = self.addtoReserveList(deleted=1, hostname="testhost")
+        rec3 = self.addtoReserveList(hostname="testhost")
+        res = dbapi.update_reserve_list_by_hostname_as_deleted(
+            self.Session,
+            "testhost",
+            datetime.datetime.now()
+        )
+        print res
+
 
 def run_test():
     test = sqlalchemyTest()
@@ -331,6 +383,9 @@ def run_test():
     # test.test_get_notification_list_distinct_hostname()
     # test.test_get_notification_list_by_hostname()
     # test.test_get_all_notification_list_by_notification_id()
-    test.test_get_all_notification_list_by_hostname_with_rscgroup_type()
+    # test.test_get_all_notification_list_by_hostname_with_rscgroup_type()
+    # test.test_get_one_reserve_list_by_cluster_port_for_update()
+    # test.test_get_all_reserve_list_by_hostname_not_deleted()
+    test.test_update_reserve_list_by_hostname_as_deleted()
 if __name__ == '__main__':
     run_test()

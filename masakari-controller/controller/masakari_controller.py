@@ -152,9 +152,9 @@ class RecoveryController(object):
                             "RecoveryController_0035", syslog.LOG_INFO)
                         dic = self.rc_config.get_value('recover_starter')
                         node_err_wait = dic.get("node_err_wait")
-                        msg = "Sleeping " + node_err_wait
-                            + " sec before starting node recovery thread,"
-                            + " until updateing nova-compute service status."
+                        msg = "Sleeping " + node_err_wait +
+                        " sec before starting node recovery thread," +
+                        " until updateing nova-compute service status."
                         self.rc_util.syslogout(msg, syslog.LOG_INFO)
                         greenthread.sleep(int(node_err_wait))
 
@@ -445,9 +445,9 @@ class RecoveryController(object):
                             "RecoveryController_0029", syslog.LOG_INFO)
                         dic = self.rc_config.get_value('recover_starter')
                         node_err_wait = dic.get("node_err_wait")
-                        msg = "Sleeping " + node_err_wait
-                            + " sec before starting recovery thread,"
-                            + " until nova recognizes the node down..."
+                        msg = "Sleeping " + node_err_wait +
+                        "sec before starting recovery thread," +
+                        " until nova recognizes the node down..."
                         self.rc_util.syslogout(msg, syslog.LOG_INFO)
                         greenthread.sleep(int(node_err_wait))
 
@@ -463,31 +463,35 @@ class RecoveryController(object):
                                 retry_mode, ))
 
                         th.start()
-                    elif notification_list_dic.get("recover_by") == 0 and
+                    elif notification_list_dic.get("recover_by") == 0 and \
                             notification_list_dic.get("progress") == 3:
-                        th=threading.Thread(
-                            target = self.rc_worker.host_maintenance_mode,
-                            args = (notification_list_dic.get(
+                        th = threading.Thread(
+                            target=self.rc_worker.host_maintenance_mode,
+                            args=(notification_list_dic.get(
                                 "notification_id"),
                                 notification_list_dic.get(
                                 "notification_hostname"),
                                 False, ))
                         th.start()
                     elif notification_list_dic.get("recover_by") == 1:
-                        retry_mode=False
-                        th=threading.Thread(
-                            target = self.rc_starter.add_failed_instance, args = (
+                        retry_mode = False
+                        th = threading.Thread(
+                            target=self.rc_starter.add_failed_instance,
+                            args=(
                                 notification_list_dic.get("notification_id"),
                                 notification_list_dic.get(
-                                    "notification_uuid"), retry_mode, ))
+                                    "notification_uuid"), retry_mode, )
+                        )
                         th.start()
                     elif notification_list_dic.get("recover_by") == 2:
-                        th=threading.Thread(
-                            target = self.rc_worker.host_maintenance_mode, args = (
+                        th = threading.Thread(
+                            target=self.rc_worker.host_maintenance_mode,
+                            args=(
                                 notification_list_dic.get("notification_id"),
                                 notification_list_dic.get(
                                     "notification_hostname"),
-                                True, ))
+                                True, )
+                        )
                         th.start()
                     else:
                         self.rc_util.syslogout_ex(
@@ -497,9 +501,9 @@ class RecoveryController(object):
                             on notification_list DB is invalid value.",
                             syslog.LOG_INFO)
 
-        except MySQLdb.Error:
-            error_type, error_value, traceback_=sys.exc_info()
-            tb_list=traceback.format_tb(traceback_)
+        except exc.SQLAlchemyError:
+            error_type, error_value, traceback_ = sys.exc_info()
+            tb_list = traceback.format_tb(traceback_)
             self.rc_util.syslogout_ex(
                 "RecoveryController_0011", syslog.LOG_ERR)
             self.rc_util.syslogout(error_type, syslog.LOG_ERR)
@@ -509,8 +513,8 @@ class RecoveryController(object):
             start_response(
                 '500 Internal Server Error', [('Content-Type', 'text/plain')])
         except KeyError:
-            error_type, error_value, traceback_=sys.exc_info()
-            tb_list=traceback.format_tb(traceback_)
+            error_type, error_value, traceback_ = sys.exc_info()
+            tb_list = traceback.format_tb(traceback_)
             self.rc_util.syslogout_ex(
                 "RecoveryController_0012", syslog.LOG_ERR)
             self.rc_util.syslogout(error_type, syslog.LOG_ERR)
@@ -520,8 +524,8 @@ class RecoveryController(object):
             start_response(
                 '500 Internal Server Error', [('Content-Type', 'text/plain')])
         except:
-            error_type, error_value, traceback_=sys.exc_info()
-            tb_list=traceback.format_tb(traceback_)
+            error_type, error_value, traceback_ = sys.exc_info()
+            tb_list = traceback.format_tb(traceback_)
             self.rc_util.syslogout_ex(
                 "RecoveryController_0013", syslog.LOG_ERR)
             self.rc_util.syslogout(error_type, syslog.LOG_ERR)
@@ -534,7 +538,7 @@ class RecoveryController(object):
         return ['method _notification_reciever returned.\r\n']
 
     def _create_notification_list_db(self, jsonData):
-        ret_dic={}
+        ret_dic = {}
 
         # Get DB from here and pass it to _check_retry_notification
         try:
@@ -547,14 +551,13 @@ class RecoveryController(object):
             # conn, cursor=self.rc_util_db.connect_database()
             # Lock notification_list table
 
-
             # table_name='notification_list'
             # self.rc_util_db.run_lock_query(table_name, cursor)
 
             if self._check_retry_notification(jsonData, session):
                 self.rc_util.syslogout_ex(
                     "RecoveryController_0030", syslog.LOG_INFO)
-                msg="Duplicate notifications. id:" + jsonData.get("id")
+                msg = "Duplicate notifications. id:" + jsonData.get("id")
                 self.rc_util.syslogout(msg, syslog.LOG_INFO)
                 self.rc_util.syslogout(jsonData, syslog.LOG_INFO)
 
@@ -564,14 +567,13 @@ class RecoveryController(object):
                     str(jsonData.get("eventType")) == "2" and \
                     str(jsonData.get("detail")) == "2":
 
-                tdatetime=datetime.datetime.strptime(
+                tdatetime = datetime.datetime.strptime(
                     jsonData.get("time"), '%Y%m%d%H%M%S')
                 if not self._check_repeated_notify(tdatetime,
                                                    jsonData.get("hostname"),
                                                    session):
-                    recover_by=0  # node recovery
-                    # Sam-work-point
-                    ret_dic=self.rc_util_db.insert_notification_list_db(
+                    recover_by = 0  # node recovery
+                    ret_dic = self.rc_util_db.insert_notification_list_db(
                         jsonData, recover_by, session)
                     self.rc_util.syslogout_ex(
                         "RecoveryController_0014", syslog.LOG_INFO)
@@ -592,7 +594,7 @@ class RecoveryController(object):
 
                 recover_by = 1  # VM recovery
                 ret_dic = self.rc_util_db.insert_notification_list_db(
-                    jsonData, recover_by, cursor)
+                    jsonData, recover_by, session)
                 self.rc_util.syslogout_ex(
                     "RecoveryController_0019", syslog.LOG_INFO)
                 self.rc_util.syslogout(jsonData, syslog.LOG_INFO)
@@ -610,11 +612,11 @@ class RecoveryController(object):
                     jsonData.get("time"), '%Y%m%d%H%M%S')
                 if not self._check_repeated_notify(tdatetime,
                                                    jsonData.get("hostname"),
-                                                   cursor):
+                                                   session):
 
                     recover_by = 2  # NODE lock
                     ret_dic = self.rc_util_db.insert_notification_list_db(
-                        jsonData, recover_by, cursor)
+                        jsonData, recover_by, session)
                     self.rc_util.syslogout_ex(
                         "RecoveryController_0021", syslog.LOG_INFO)
                     self.rc_util.syslogout(jsonData, syslog.LOG_INFO)
@@ -656,7 +658,6 @@ class RecoveryController(object):
                 self.rc_util.syslogout(jsonData, syslog.LOG_INFO)
                 msg = "Ignore notification. Notification:" + str(jsonData)
                 self.rc_util.syslogout(msg, syslog.LOG_INFO)
-            self.rc_util_db.disconnect_database(conn, cursor)
         except Exception:
             error_type, error_value, traceback_ = sys.exc_info()
             tb_list = traceback.format_tb(traceback_)
@@ -666,7 +667,6 @@ class RecoveryController(object):
             self.rc_util.syslogout(error_value, syslog.LOG_ERR)
             for tb in tb_list:
                 self.rc_util.syslogout(tb, syslog.LOG_ERR)
-            self.rc_util_db.disconnect_database(conn, cursor)
             raise
         return ret_dic
 
@@ -679,7 +679,7 @@ class RecoveryController(object):
         # cnt = cursor.execute(sql)
 
         cnt = dbapi.get_all_notification_list_by_notification_id(
-            sessaion,notification_id)
+            sessaion, notification_id)
         # if cnt is 0, not duplicate notification.
         if not cnt:
             return 0
@@ -710,8 +710,8 @@ class RecoveryController(object):
         for row in result:
             db_time = row.notification_time
             delta = notification_time - db_time
-            if long(delta.total_seconds()) \
-                    <= long(notification_time_difference):
+            if long(delta.total_seconds()) <= long(
+                    notification_time_difference):
                 flg = 1
 
         return flg
