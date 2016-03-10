@@ -174,9 +174,9 @@ def get_all_vm_list_by_progress(session):
         or_(VmList.progress == 0, VmList.progress == 1)).all()
 
 
-def update_vm_list_by_id(session, id, key, value):
+def update_vm_list_by_id_dict(session, id, update_val):
     # UPDATE vm_list SET :key = :value WHERE id = :id
-    return session.query(VmList).filter_by(id=id).update({key: value})
+    return session.query(VmList).filter_by(id=id).update(update_val)
 
 
 def add_vm_list(session, create_at, deleted, uuid, progress, retry_cnt,
@@ -310,4 +310,10 @@ def get_notification_list_distinct_hostname(session):
     cnt = session.query(NotificationList.notification_hostname,
                         ).filter_by(progress=0).filter_by(
                             recover_by=0).distinct()
+    return cnt
+
+
+def update_notification_list_dict(session, notification_id, update_val):
+    cnt = session.query(NotificationList).filter_by(
+        notification_id=notification_id).update(update_val)
     return cnt

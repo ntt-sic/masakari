@@ -372,6 +372,68 @@ class sqlalchemyTest(object):
         )
         print res
 
+    def test_update_notification_list_dict(self):
+        t = datetime.datetime.now()
+        tz_name = time.tzname
+        tz_name_str = str(tz_name)
+        tz_name_str = tz_name_str.lstrip('(')
+        tz_name_str = tz_name_str.rstrip(')')
+        time_daylight = time.daylight
+        time_daylight_str = str(time_daylight)
+        notification_id = str(uuid.uuid4())
+        pdict = dict(
+            create_at=t,
+            update_at=t,
+            delete_at=t,
+            deleted=0,
+            notification_id=notification_id,
+            notification_type=1,
+            notification_regionID="RegionOne",
+            notification_hostname="compute01",
+            notification_uuid=None,
+            notification_time=t,
+            notification_eventID=1,
+            notification_eventType="VM",
+            notification_detail=1,
+            notification_startTime=t,
+            notification_endTime=t,
+            notification_tzname=tz_name_str,
+            notification_daylight=time_daylight_str,
+            notification_cluster_port=22222,
+            progress=0,
+            recover_by=None,
+            iscsi_ip=None,
+            controle_ip="192.168.50.10",
+            recover_to="compute01"
+        )
+        self.addtoNotificationList(**pdict)
+        ut = datetime.datetime.now()
+        update_val = {}
+
+        def set_val(t, key, val):
+            t[key] = val
+            return t
+        update_val = set_val(update_val, 'delete_at', ut)
+        update_val = set_val(update_val, 'update_at', ut)
+        cnt = dbapi.update_notification_list_dict(
+            self.Session,
+            notification_id,
+            update_val)
+        if cnt == 1:
+            print "OK"
+        else:
+            print "ERROR"
+        row = self.Session.query(NotificationList).filter_by(
+            notification_id=notification_id).all()
+        rec = row.pop()
+        if rec.update_at == ut and rec.delete_at == ut:
+            print "OK"
+        else:
+            print "ERROR"
+
+    def test_add_vm_list(self):
+        pass
+
 
 def run_test():
     test = sqlalchemyTest()
@@ -386,6 +448,7 @@ def run_test():
     # test.test_get_all_notification_list_by_hostname_with_rscgroup_type()
     # test.test_get_one_reserve_list_by_cluster_port_for_update()
     # test.test_get_all_reserve_list_by_hostname_not_deleted()
-    test.test_update_reserve_list_by_hostname_as_deleted()
+    # test.test_update_reserve_list_by_hostname_as_deleted()
+    test.test_update_notification_list_key_val()
 if __name__ == '__main__':
     run_test()
