@@ -35,6 +35,11 @@ import traceback
 from eventlet import greenthread
 import errno
 
+from keystoneauth1 import loading
+from keystoneauth1 import session
+from keystoneclient import client as keystone_client
+from novaclient import client as nova_client
+from novaclient import exceptions
 from sqlalchemy import exc
 
 parentdir = os.path.abspath(os.path.join(os.path.dirname(__file__),
@@ -47,7 +52,6 @@ if parentdir not in sys.path:
 
 import db.api as dbapi
 from db.models import NotificationList, VmList, ReserveList
-
 
 class RecoveryControllerUtilDb(object):
 
@@ -507,47 +511,82 @@ class RecoveryControllerUtilApi(object):
     API-related utility classes related to VM recovery control
     """
 
+    KEYSTONE_API_VERSION = '3'
+    NOVA_API_VERSION = '2'
+
     def __init__(self, config_object):
         self.rc_config = config_object
         self.rc_util = RecoveryControllerUtil(self.rc_config)
 
+        project_id = self._fetch_project_id()
+        auth_args = {
+            'auth_url': self.rc_config.conf_nova['auth_url'],
+            'username': self.rc_config.conf_nova['admin_user'],
+            'password': self.rc_config.conf_nova['admin_password'],
+            'project_id': project_id,
+            'user_domain_name': self.rc_config.conf_nova['domain'],
+            'project_domain_name': self.rc_config.conf_nova['domain'],
+            }
+
+        self.auth_session = self._get_session(auth_args)
+
+        conf_dic = self.rc_config.get_value('recover_starter')
+        api_retries = conf_dic.get('api_max_retry_cnt')
+
+        self.nova_client = nova_client.Client(self.NOVA_API_VERSION,
+                                              session=self.auth_session,
+                                              connect_retries=api_retries)
+
+    def _get_session(self, auth_args):
+        """ Return Keystone API session object."""
+        loader = loading.get_plugin_loader('password')
+        auth = loader.load_from_options(**auth_args)
+        sess = session.Session(auth=auth)
+
+        return sess
+
+    def _fetch_project_id(self):
+        auth_args = {
+            'auth_url': self.rc_config.conf_nova['auth_url'],
+            'username': self.rc_config.conf_nova['admin_user'],
+            'password': self.rc_config.conf_nova['admin_password'],
+            'project_name': self.rc_config.conf_nova['project_name'],
+            'project_domain_name': self.rc_config.conf_nova['domain'],
+            'user_domain_name': self.rc_config.conf_nova['domain'],
+            }
+        sess = self._get_session(auth_args)
+
+        ks_client = keystone_client.Client(self.KEYSTONE_API_VERSION,
+                                           session=sess)
+        project_name = self.rc_config.conf_nova['project_name']
+        projects = filter(lambda x: (x.name == project_name),
+                         ks_client.projects.list())
+
+        msg = ("Project name: %s doesn't exist in project list."
+               % self.rc_config.conf_nova['project_name'])
+        assert len(projects) == 1, msg
+
+        return projects[0].id
+
     def do_instance_show(self, uuid):
-        """
-        API-instance_show. Edit the body of the curl is
-        performed using the nova client.
-        :uuid : Instance id to be used in nova cliant curl.
-        :return :response_code :response code
-        :return :rbody :response body(json)
+        """Returns Server Intance.
+
+        :uuid : Instance id
+        :return : Server instance
         """
         try:
+            self.rc_util.syslogout('Call Server Details API with %s' % uuid,
+                                   syslog.LOG_INFO)
+            server = self.nova_client.servers.get(uuid)
 
-            # Set nova_curl_method
-            nova_curl_method = "GET"
-            # Set nova_variable_url
-            nova_variable_url = "/servers/" + uuid
-            # Set nova_body
-            response_code, rbody = self._nova_curl_client(nova_curl_method,
-                                                          nova_variable_url)
-
-        except:
-
-            self.rc_util.syslogout_ex("RecoveryControllerUtilApi_0001",
-                                      syslog.LOG_ERR)
-            error_type, error_value, traceback_ = sys.exc_info()
-            tb_list = traceback.format_tb(traceback_)
-            self.rc_util.syslogout(error_type, syslog.LOG_ERR)
-            self.rc_util.syslogout(error_value, syslog.LOG_ERR)
-            for tb in tb_list:
-                self.rc_util.syslogout(tb, syslog.LOG_ERR)
-
-            msg = "[ nova_curl_method=" + nova_curl_method + " ]"
-            self.rc_util.syslogout(msg, syslog.LOG_ERR)
-            msg = "[ nova_variable_url=" + nova_variable_url + " ]"
-            self.rc_util.syslogout(msg, syslog.LOG_ERR)
+        except exceptions.ClientException as e:
+            error_code = "[RecoveryControllerUtilApi_0001]"
+            msg = 'Fails to call Nova get Server Details API: %s' % e
+            self.rc_util.syslogout(error_code + msg, syslog.LOG_ERR)
 
             raise
 
-        return response_code, rbody
+        return server
 
     def do_instance_stop(self, uuid):
         """

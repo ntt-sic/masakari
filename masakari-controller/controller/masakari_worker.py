@@ -68,27 +68,19 @@ class RecoveryControllerWorker(object):
             api_retry_interval = conf_dic.get('api_retry_interval')
             cnt = 0
             while cnt < int(api_max_retry_cnt) + 1:
-                # Call nova show API.
-                rc, rbody = self.rc_util_api.do_instance_show(uuid)
-                rbody = json.loads(rbody)
-
-                if rc == '200':
-                    break
-                elif rc == '500':
+                try:
+                    # Call nova show API.
+                    server = self.rc_util_api.do_instance_show(uuid)
+                    return server
+                except Exception:
                     if cnt == int(api_max_retry_cnt):
                         raise EnvironmentError("Failed to nova show API.")
                     else:
-                        self.rc_util.syslogout_ex(
-                            "RecoveryControllerWorker_0040", syslog.LOG_INFO)
-                        msg = "Retry nova show API."
+                        msg = ("[RecoveryControllerWorker_0040]"
+                               " Retry nova show API.")
                         self.rc_util.syslogout(msg, syslog.LOG_INFO)
                         greenthread.sleep(int(api_retry_interval))
-                else:
-                    raise EnvironmentError("Failed to nova show API.")
-                cnt += 1
-
-            # Set return values.
-            vm_info = rbody.get('server')
+                        cnt += 1
 
         except EnvironmentError:
             self.rc_util.syslogout_ex("RecoveryControllerWorker_0004",
@@ -120,8 +112,6 @@ class RecoveryControllerWorker(object):
             for tb in tb_list:
                 self.rc_util.syslogout(tb, syslog.LOG_ERR)
             raise
-
-        return vm_info
 
     def _get_vmha_param(self, session, uuid, primary_id):
         # TODO(sampath): remove unused 'uuid' form args
@@ -379,7 +369,7 @@ class RecoveryControllerWorker(object):
 
             while loop_cnt < int(api_check_max_cnt):
                 vm_info = self._get_vm_param(uuid)
-                vm_state = vm_info.get('OS-EXT-STS:vm_state')
+                vm_state = getattr(vm_info, 'OS-EXT-STS:vm_state')
                 if vm_state == 'stopped':
                     break
                 else:
@@ -593,7 +583,7 @@ class RecoveryControllerWorker(object):
 
             # Get vm infomation.
             vm_info = self._get_vm_param(uuid)
-            HA_Enabled = vm_info.get('metadata').get('HA-Enabled')
+            HA_Enabled = vm_info.metadata.get('HA-Enabled')
             if HA_Enabled:
                 HA_Enabled = HA_Enabled.upper()
             if HA_Enabled != 'OFF':
@@ -601,7 +591,7 @@ class RecoveryControllerWorker(object):
 
             # Set recovery parameter.
             exe_param = {}
-            exe_param['vm_state'] = vm_info.get('OS-EXT-STS:vm_state')
+            exe_param['vm_state'] = getattr(vm_info, 'OS-EXT-STS:vm_state')
             exe_param['HA-Enabled'] = HA_Enabled
             recover_by, recover_to = self._get_vmha_param(
                 session, uuid, primary_id)
