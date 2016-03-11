@@ -37,6 +37,15 @@ import masakari_util as util
 from eventlet import greenthread
 
 
+parentdir = os.path.abspath(os.path.join(os.path.dirname(__file__),
+                                         os.path.pardir))
+# rootdir = os.path.abspath(os.path.join(parentdir, os.path.pardir))
+# project root directory needs to be add at list head rather than tail
+# this file named 'masakari' conflicts to the directory name
+sys.path = [parentdir] + sys.path
+import db.api as dbapi
+
+
 class RecoveryControllerStarter(object):
 
     """
@@ -62,7 +71,7 @@ class RecoveryControllerStarter(object):
         return long(delta.total_seconds())
 
     def _create_vm_list_db_for_failed_instance(self,
-                                               cursor,
+                                               session,
                                                notification_id,
                                                notification_uuid):
         try:
@@ -73,24 +82,26 @@ class RecoveryControllerStarter(object):
                 "interval_to_be_retry")
             max_retry_cnt = conf_recover_starter_dic.get("max_retry_cnt")
             # check duplication
-            sql = "SELECT progress, create_at, retry_cnt " \
-                  "FROM vm_list " \
-                  "WHERE uuid = '%s' " \
-                  "ORDER BY create_at DESC LIMIT 1" % (notification_uuid)
+            # sql = "SELECT progress, create_at, retry_cnt " \
+            #       "FROM vm_list " \
+            #       "WHERE uuid = '%s' " \
+            #       "ORDER BY create_at DESC LIMIT 1" % (notification_uuid)
 
-            row_cnt = cursor.execute(sql)
-            result = cursor.fetchone()
+            # row_cnt = cursor.execute(sql)
+            # result = cursor.fetchone()
+            result = dbapi.get_one_vm_list_by_uuid_create_at_last(
+                session, notification_uuid)
 
             primary_id = None
             # row_cnt is always 0 or 1
-            if row_cnt == 0:
+            if not result:
                 primary_id = self.rc_util_db.insert_vm_list_db(
-                    cursor, notification_id, notification_uuid, 0)
+                    session, notification_id, notification_uuid, 0)
                 return primary_id
             else:
-                result_progress = result.get("progress")
-                result_create_at = result.get("create_at")
-                result_retry_cnt = result.get("retry_cnt")
+                result_progress = result.progress
+                result_create_at = result.create_at
+                result_retry_cnt = result.retry_cnt
 
                 delta = self._compare_timestamp(
                     datetime.datetime.now(), result_create_at)
@@ -98,7 +109,7 @@ class RecoveryControllerStarter(object):
                         delta <= long(interval_to_be_retry):
                     if result_retry_cnt < long(max_retry_cnt):
                         primary_id = self.rc_util_db.insert_vm_list_db(
-                            cursor,
+                            session,
                             notification_id,
                             notification_uuid,
                             result_retry_cnt + 1)
@@ -119,7 +130,7 @@ class RecoveryControllerStarter(object):
                 elif result_progress == 2 and \
                         delta > long(interval_to_be_retry):
                     primary_id = self.rc_util_db.insert_vm_list_db(
-                        cursor, notification_id, notification_uuid, 0)
+                        session, notification_id, notification_uuid, 0)
                     return primary_id
                 else:
                     # Not insert vm_list db.
@@ -133,16 +144,16 @@ class RecoveryControllerStarter(object):
                     self.rc_util.syslogout(msg, syslog.LOG_INFO)
                     return None
 
-        except MySQLdb.Error:
-            self.rc_util.syslogout_ex("RecoveryControllerStarter_0006",
-                                      syslog.LOG_ERR)
-            error_type, error_value, traceback_ = sys.exc_info()
-            tb_list = traceback.format_tb(traceback_)
-            self.rc_util.syslogout(error_type, syslog.LOG_ERR)
-            self.rc_util.syslogout(error_value, syslog.LOG_ERR)
-            for tb in tb_list:
-                self.rc_util.syslogout(tb, syslog.LOG_ERR)
-            raise MySQLdb.Error
+        # except MySQLdb.Error:
+        #     self.rc_util.syslogout_ex("RecoveryControllerStarter_0006",
+        #                               syslog.LOG_ERR)
+        #     error_type, error_value, traceback_ = sys.exc_info()
+        #     tb_list = traceback.format_tb(traceback_)
+        #     self.rc_util.syslogout(error_type, syslog.LOG_ERR)
+        #     self.rc_util.syslogout(error_value, syslog.LOG_ERR)
+        #     for tb in tb_list:
+        #         self.rc_util.syslogout(tb, syslog.LOG_ERR)
+        #     raise MySQLdb.Error
         except KeyError:
             self.rc_util.syslogout_ex("RecoveryControllerStarter_0007",
                                       syslog.LOG_ERR)
@@ -231,18 +242,20 @@ class RecoveryControllerStarter(object):
         """
 
         try:
-            conn = None
-            cursor = None
-            # Get database session
-            conn, cursor = self.rc_util_db.connect_database()
-            table_name = 'vm_list'
-            self.rc_util_db.run_lock_query(table_name, cursor)
+            # conn = None
+            # cursor = None
+            # # Get database session
+            # conn, cursor = self.rc_util_db.connect_database()
+            # table_name = 'vm_list'
+            # self.rc_util_db.run_lock_query(table_name, cursor)
+            db_engine = dbapi.get_engine()
+            session = dbapi.get_session(db_engine)
 
             # Get primary id of vm_list
             primary_id = self._create_vm_list_db_for_failed_instance(
-                cursor, notification_id, notification_uuid)
+                session, notification_id, notification_uuid)
 
-            self.rc_util_db.disconnect_database(conn, cursor)
+            # self.rc_util_db.disconnect_database(conn, cursor)
 
             # update record in notification_list
             self.rc_util_db.update_notification_list_db(

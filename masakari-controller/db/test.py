@@ -9,6 +9,9 @@ from models import NotificationList, VmList, ReserveList
 from sqlalchemy.orm import scoped_session
 import api as dbapi
 import random
+from contextlib import contextmanager
+import sqlalchemy.exc as dbexc
+import traceback
 
 
 class sqlalchemyTest(object):
@@ -26,6 +29,18 @@ class sqlalchemyTest(object):
             print "Exception: ", e
             sys.exit(2)
 
+    @contextmanager
+    def _sqlalchemy_error(self):
+        try:
+            yield
+        except dbexc.SQLAlchemyError, e:
+            print e
+            error_type, error_value, traceback_ = sys.exc_info()
+            tbl = traceback.format_tb(traceback_)
+            for tb in tbl:
+                print tb
+            return
+
     def addtoVmList(self, create_at, deleted, uuid, progress,
                     retry_cnt, notification_id, recover_to, recover_by):
 
@@ -34,7 +49,10 @@ class sqlalchemyTest(object):
                          notification_id=notification_id,
                          recover_to=recover_to,
                          recover_by=recover_by)
-        self.Session.add(vm_list)
+        with self._sqlalchemy_error():
+            self.Session.add(vm_list)
+            self.Session.commit()
+
         return vm_list
 
     def addtoReserveList(self, **kwargs):
@@ -47,14 +65,14 @@ class sqlalchemyTest(object):
             deleted=deleted,
             cluster_port=cluster_port,
             hostname=hostname)
-        self.Session.add(reslist)
-        self.Session.commit()
+        with self._sqlalchemy_error():
+            self.Session.add(reslist)
+            self.Session.commit()
         return reslist
 
     def addtoNotificationList(self, **kwargs):
         # Thing generate for each event
         t = datetime.datetime.now()
-        currentTime = t.strftime('%Y%m%d%H%M%S')
         tz_name = time.tzname
         tz_name_str = str(tz_name)
         tz_name_str = tz_name_str.lstrip('(')
@@ -95,18 +113,11 @@ class sqlalchemyTest(object):
             controle_ip=kwargs.pop('controle_ip', "192.168.50.10"),
             recover_to=kwargs.pop('recover_to', "compute01")
         )
-        self.Session.add(notification_list)
-        self.Session.commit()
-        return notification_list
 
-    def testcaseH(self):
-        # result = {}
-        self.addtoNotificationList(noticeType='VM',
-                                   uuid=None, eventType=1,
-                                   eventID=2, detail=2)
-        q = self.Session.query(NotificationList).filter_by(progress="0").all()
-        for i in q:
-            print i.notification_id
+        with self._sqlalchemy_error():
+            self.Session.add(notification_list)
+            self.Session.commit()
+        return notification_list
 
     def test_get_old_records_notification(self):
         now = datetime.datetime.now()
@@ -432,11 +443,45 @@ class sqlalchemyTest(object):
             print "ERROR"
 
     def test_add_vm_list(self):
-        pass
+        notification_id = str(uuid.uuid4())
+        notification_uuid = str(uuid.uuid4())
+        retry_cnt = 4
+        notification_recover_to = "compute01"
+        notification_recover_by = "compute02"
+        res = dbapi.add_vm_list(self.Session,
+                                datetime.datetime.now(),
+                                "0",
+                                notification_uuid,
+                                "0",
+                                str(retry_cnt),
+                                notification_id,
+                                notification_recover_to,
+                                str(notification_recover_by)
+                                )
+        rec = self.Session.query(VmList).filter_by(
+            uuid=notification_uuid).filter_by(
+                notification_id=notification_id).all()
+        if rec.pop() is res:
+            print "OK"
+        else:
+            print "ERROR"
+        print res.id
+
+    def testcaseH(self):
+        # result = {}
+        self.addtoNotificationList(notification_id=None,
+                                   uuid=None, eventType=1,
+                                   eventID=2, detail=2)
+        with self._sqlalchemy_error():
+            q = self.Session.query(
+                NotificationList).filter_by(progress2="0").all()
+        for i in q:
+            print i.notification_id
 
 
 def run_test():
     test = sqlalchemyTest()
+    test.testcaseH()
     # test.test_get_old_records_notification()
     # test.test_delet_expired_notification()
     # test.test_get_reprocessing_records_list_distinct()
@@ -449,6 +494,7 @@ def run_test():
     # test.test_get_one_reserve_list_by_cluster_port_for_update()
     # test.test_get_all_reserve_list_by_hostname_not_deleted()
     # test.test_update_reserve_list_by_hostname_as_deleted()
-    test.test_update_notification_list_key_val()
+    # test.test_update_notification_list_dict()
+    # test.test_add_vm_list()
 if __name__ == '__main__':
     run_test()

@@ -34,12 +34,14 @@ import threading
 import traceback
 from eventlet import greenthread
 from sqlalchemy import exc
-# parentdir = os.path.abspath(os.path.join(os.path.dirname(__file__),
-#                                          os.path.pardir))
+
+parentdir = os.path.abspath(os.path.join(os.path.dirname(__file__),
+                                         os.path.pardir))
 # # rootdir = os.path.abspath(os.path.join(parentdir, os.path.pardir))
 # # project root directory needs to be add at list head rather than tail
 # # this file named 'masakari' conflicts to the directory name
-# sys.path=[parentdir] + sys.path
+sys.path = [parentdir] + sys.path
+
 import db.api as dbapi
 from db.models import NotificationList, VmList, ReserveList
 
@@ -102,16 +104,16 @@ class RecoveryControllerUtilDb(object):
             #           notification_id,
             #           notification_recover_to,
             #           str(notification_recover_by)))
-            dbapi.add_vm_list(session,
-                              datetime.datetime.now(),
-                              "0",
-                              notification_uuid,
-                              "0",
-                              str(retry_cnt),
-                              notification_id,
-                              notification_recover_to,
-                              str(notification_recover_by)
-                              )
+            vm_item = dbapi.add_vm_list(session,
+                                        datetime.datetime.now(),
+                                        "0",
+                                        notification_uuid,
+                                        "0",
+                                        str(retry_cnt),
+                                        notification_id,
+                                        notification_recover_to,
+                                        str(notification_recover_by)
+                                        )
 
             self.rc_util.syslogout_ex("RecoveryControllerUtilDb_0001",
                                       syslog.LOG_INFO)
@@ -120,13 +122,14 @@ class RecoveryControllerUtilDb(object):
             # cursor.execute(sql)
 
             # Get this primary id
-            sql = "SELECT LAST_INSERT_ID()"
-            cursor.execute(sql)
-            result = cursor.fetchone()
+            # sql = "SELECT LAST_INSERT_ID()"x
+            # cursor.execute(sql)
+            # result = cursor.fetchone()
 
-            self.rc_util.syslogout(str(result), syslog.LOG_INFO)
+            # self.rc_util.syslogout(str(result), syslog.LOG_INFO)
 
-            primary_id = result.get("LAST_INSERT_ID()")
+            # primary_id = result.get("LAST_INSERT_ID()")
+            primary_id = vm_item.id
 
             return primary_id
 
@@ -769,13 +772,13 @@ class RecoveryControllerUtilDb(object):
 
     #             raise MySQLdb.Error
 
-        # Retry over
-        if retry_cnt > int(lock_retry_max_cnt):
-            self.rc_util.syslogout_ex("RecoveryControllerUtilDb_0028",
-                                      syslog.LOG_ERR)
-            msg = 'Lock timeout retry count exceeded, giving up.'
-            self.rc_util.syslogout(msg, syslog.LOG_ERR)
-            raise MySQLdb.Error
+        # # Retry over
+        # if retry_cnt > int(lock_retry_max_cnt):
+        #     self.rc_util.syslogout_ex("RecoveryControllerUtilDb_0028",
+        #                               syslog.LOG_ERR)
+        #     msg = 'Lock timeout retry count exceeded, giving up.'
+        #     self.rc_util.syslogout(msg, syslog.LOG_ERR)
+        #     raise MySQLdb.Error
 
 
 class RecoveryControllerUtilApi(object):
@@ -1280,9 +1283,9 @@ class RecoveryControllerUtilApi(object):
             "{ \"domain\": { \"name\": \"%s\" }, \"name\": " \
             "\"%s\", \"password\": \"%s\" } } }, \"scope\": " \
             "{ \"project\": { \"domain\": { \"name\": \"%s\" }, " \
-                     "\"name\": \"%s\"} } } }" \
-                     % (domain, admin_user, admin_password, domain,
-                        project_name)
+            "\"name\": \"%s\"} } } }" \
+            % (domain, admin_user, admin_password, domain,
+               project_name)
 
         token_curl = "curl " \
             "-i '%s' -X POST -H \"Accept: application/json\" " \
@@ -1345,7 +1348,7 @@ class RecoveryControllerUtilApi(object):
             "-H \"Accept: application/json\" " \
             "-H \"Content-Type: application/json\" " \
             "-H \"X-Auth-Token: %s\"" \
-                           % (nova_client_url, token)
+            % (nova_client_url, token)
         nova_exe_res = self._exe_curl(nova_client_curl)
 
         if len(nova_exe_res) == 0:
@@ -1398,7 +1401,7 @@ class RecoveryControllerUtilApi(object):
             "{ \"domain\": { \"name\": \"%s\" }, \"name\": \"%s\", " \
             "\"password\": \"%s\" } } }, \"scope\": { \"project\": " \
             "{ \"id\": \"%s\"} } } }" \
-                     % (domain, admin_user, admin_password, project_id)
+            % (domain, admin_user, admin_password, project_id)
 
         token_curl = "curl " \
             "-i '%s' -X POST -H \"Accept: application/json\" " \
