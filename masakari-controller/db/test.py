@@ -442,6 +442,70 @@ class sqlalchemyTest(object):
         else:
             print "ERROR"
 
+    def test_get_all_by_progress(self):
+        # def addtoVmList(self, create_at, deleted, uuid, progress,
+        #             retry_cnt, notification_id, recover_to, recover_by):
+        notification_id = str(uuid.uuid4())
+        notification_uuid_stat = str(uuid.uuid4())
+        retry_cnt = 0
+        notification_recover_to = "compute01"
+        notification_recover_by = "compute02"
+        for i in xrange(10):
+            progress = i % 2
+            if i % 2:
+                notification_uuid = str(uuid.uuid4())
+            else:
+                notification_uuid = notification_uuid_stat
+            self.addtoVmList(
+                datetime.datetime.now(),
+                "0",
+                notification_uuid,
+                progress,
+                str(retry_cnt),
+                notification_id,
+                notification_recover_to,
+                str(notification_recover_by)
+            )
+        res, res_all = dbapi.get_all_vm_list_by_progress(self.Session)
+        print type(res)
+        print type(res_all)
+        for i in res:
+            print i
+
+    def test_get_vm_list_by_uuid_and_progress_sorted(self):
+        notification_id = str(uuid.uuid4())
+        notification_uuid = str(uuid.uuid4())
+        retry_cnt = 0
+        notification_recover_to = "compute01"
+        recover_by = "compute00"
+        for i in xrange(10):
+            if not i % 3:
+                recover_by = "compute0%s" % (i)
+            if i % 2:
+                progress = 1
+            else:
+                progress = 0
+            self.addtoVmList(
+                datetime.datetime.now(),
+                "0",
+                notification_uuid,
+                progress,
+                str(retry_cnt),
+                notification_id,
+                notification_recover_to,
+                str(recover_by)
+            )
+        res = dbapi.get_vm_list_by_uuid_and_progress_sorted(
+            self.Session, notification_uuid)
+
+        for i in res:
+            print ("%s, %s, %s") % (i.uuid, i.create_at, i.recover_by)
+
+        res = dbapi.get_vm_list_by_id(self.Session, 1)
+        # print len(res)
+        print type(res)
+        print res.recover_by
+
     def test_add_vm_list(self):
         notification_id = str(uuid.uuid4())
         notification_uuid = str(uuid.uuid4())
@@ -481,7 +545,7 @@ class sqlalchemyTest(object):
 
 def run_test():
     test = sqlalchemyTest()
-    test.testcaseH()
+    # test.testcaseH()
     # test.test_get_old_records_notification()
     # test.test_delet_expired_notification()
     # test.test_get_reprocessing_records_list_distinct()
@@ -496,5 +560,7 @@ def run_test():
     # test.test_update_reserve_list_by_hostname_as_deleted()
     # test.test_update_notification_list_dict()
     # test.test_add_vm_list()
+    # test.test_get_all_by_progress()
+    test.test_get_vm_list_by_uuid_and_progress_sorted()
 if __name__ == '__main__':
     run_test()

@@ -20,7 +20,7 @@ This file defines the RecoveryControllerStarter class.
 """
 
 import threading
-import MySQLdb
+#import MySQLdb
 import sys
 import datetime
 import ConfigParser
@@ -35,7 +35,7 @@ import masakari_worker as worker
 import masakari_config as config
 import masakari_util as util
 from eventlet import greenthread
-
+import os
 
 parentdir = os.path.abspath(os.path.join(os.path.dirname(__file__),
                                          os.path.pardir))
@@ -81,14 +81,6 @@ class RecoveryControllerStarter(object):
             interval_to_be_retry = conf_recover_starter_dic.get(
                 "interval_to_be_retry")
             max_retry_cnt = conf_recover_starter_dic.get("max_retry_cnt")
-            # check duplication
-            # sql = "SELECT progress, create_at, retry_cnt " \
-            #       "FROM vm_list " \
-            #       "WHERE uuid = '%s' " \
-            #       "ORDER BY create_at DESC LIMIT 1" % (notification_uuid)
-
-            # row_cnt = cursor.execute(sql)
-            # result = cursor.fetchone()
             result = dbapi.get_one_vm_list_by_uuid_create_at_last(
                 session, notification_uuid)
 
@@ -144,16 +136,6 @@ class RecoveryControllerStarter(object):
                     self.rc_util.syslogout(msg, syslog.LOG_INFO)
                     return None
 
-        # except MySQLdb.Error:
-        #     self.rc_util.syslogout_ex("RecoveryControllerStarter_0006",
-        #                               syslog.LOG_ERR)
-        #     error_type, error_value, traceback_ = sys.exc_info()
-        #     tb_list = traceback.format_tb(traceback_)
-        #     self.rc_util.syslogout(error_type, syslog.LOG_ERR)
-        #     self.rc_util.syslogout(error_value, syslog.LOG_ERR)
-        #     for tb in tb_list:
-        #         self.rc_util.syslogout(tb, syslog.LOG_ERR)
-        #     raise MySQLdb.Error
         except KeyError:
             self.rc_util.syslogout_ex("RecoveryControllerStarter_0007",
                                       syslog.LOG_ERR)
@@ -165,7 +147,7 @@ class RecoveryControllerStarter(object):
                 self.rc_util.syslogout(tb, syslog.LOG_ERR)
             raise KeyError
 
-    def _create_vm_list_db_for_failed_host(self,
+    def _create_vm_list_db_for_failed_host(self, session,
                                            notification_id,
                                            notification_uuid):
         try:
@@ -175,26 +157,23 @@ class RecoveryControllerStarter(object):
             interval_to_be_retry = conf_recover_starter_dic.get(
                 "interval_to_be_retry")
             max_retry_cnt = conf_recover_starter_dic.get("max_retry_cnt")
-
-            conn = None
-            cursor = None
             # Get database session
-            conn, cursor = self.rc_util_db.connect_database()
-
-            table_name = 'vm_list'
-            self.rc_util_db.run_lock_query(table_name, cursor)
+            # table_name = 'vm_list'
+            # self.rc_util_db.run_lock_query(table_name, cursor)
             # check duplication
-            sql = ("SELECT * FROM vm_list"
-                   " WHERE uuid = '%s' AND (progress = 0 OR progress = 1)"
-                   " ORDER BY create_at DESC LIMIT 1") % (notification_uuid)
+            # sql = ("SELECT * FROM vm_list"
+            #        " WHERE uuid = '%s' AND (progress = 0 OR progress = 1)"
+            #        " ORDER BY create_at DESC LIMIT 1") % (notification_uuid)
 
-            row_cnt = cursor.execute(sql)
+            # row_cnt = cursor.execute(sql)
+            row_cnt = dbapi.get_one_vm_list_by_uuid_and_progress_create_at_last(
+                notification_uuid)
 
             primary_id = None
             if row_cnt == 0:
                 primary_id = self.rc_util_db.insert_vm_list_db(
-                    cursor, notification_id, notification_uuid, 0)
-                self.rc_util_db.disconnect_database(conn, cursor)
+                    session, notification_id, notification_uuid, 0)
+                # self.rc_util_db.disconnect_database(conn, cursor)
                 return primary_id
             else:
                 self.rc_util.syslogout_ex("RecoveryControllerStarter_0008",
@@ -203,20 +182,9 @@ class RecoveryControllerStarter(object):
                       "because there are same uuid records that " \
                       "progress is 0 or 1."
                 self.rc_util.syslogout(msg, syslog.LOG_INFO)
-                self.rc_util_db.disconnect_database(conn, cursor)
+                # self.rc_util_db.disconnect_database(conn, cursor)
                 return None
 
-        except MySQLdb.Error:
-            self.rc_util.syslogout_ex("RecoveryControllerStarter_0009",
-                                      syslog.LOG_ERR)
-            error_type, error_value, traceback_ = sys.exc_info()
-            tb_list = traceback.format_tb(traceback_)
-            self.rc_util.syslogout(error_type, syslog.LOG_ERR)
-            self.rc_util.syslogout(error_value, syslog.LOG_ERR)
-            for tb in tb_list:
-                self.rc_util.syslogout(tb, syslog.LOG_ERR)
-            self.rc_util_db.disconnect_database(conn, cursor)
-            raise MySQLdb.Error
         except KeyError:
             self.rc_util.syslogout_ex("RecoveryControllerStarter_0010",
                                       syslog.LOG_ERR)
@@ -287,19 +255,6 @@ class RecoveryControllerStarter(object):
                                            sem_recovery_instance)).start()
             return
 
-        except MySQLdb.Error:
-            self.rc_util.syslogout_ex("RecoveryControllerStarter_0011",
-                                      syslog.LOG_ERR)
-            error_type, error_value, traceback_ = sys.exc_info()
-            tb_list = traceback.format_tb(traceback_)
-            self.rc_util.syslogout(error_type, syslog.LOG_ERR)
-            self.rc_util.syslogout(error_value, syslog.LOG_ERR)
-            for tb in tb_list:
-                self.rc_util.syslogout(tb, syslog.LOG_ERR)
-            self.rc_util_db.update_notification_list_db(
-                'progress', 5, notification_id)
-            self.rc_util_db.disconnect_database(conn, cursor)
-            return
         except KeyError:
             self.rc_util.syslogout_ex("RecoveryControllerStarter_0012",
                                       syslog.LOG_ERR)
@@ -337,6 +292,8 @@ class RecoveryControllerStarter(object):
         """
 
         try:
+            db_engine = dbapi.get_engine()
+            session = dbapi.get_session(db_engine)
             conf_dict = self.rc_config.get_value('recover_starter')
             recovery_max_retry_cnt = conf_dict.get('recovery_max_retry_cnt')
             recovery_retry_interval = conf_dict.get('recovery_retry_interval')
@@ -365,40 +322,50 @@ class RecoveryControllerStarter(object):
 
                 # update record in notification_list
                 self.rc_util_db.update_notification_list_db(
-                    'progress', 2, notification_id)
+                    session, 'progress', 2, notification_id)
 
                 return
             else:
-                conn = None
-                cursor = None
-                # Get database session
-                conn, cursor = self.rc_util_db.connect_database()
+                # conn = None
+                # cursor = None
+                # # Get database session
+                # conn, cursor = self.rc_util_db.connect_database()
 
-                sql = ("select recover_to "
-                       "from notification_list "
-                       "where notification_id='%s' "
-                       "for update") % (notification_id)
-                cnt = cursor.execute(sql)
+                # sql = ("select recover_to "
+                #        "from notification_list "
+                #        "where notification_id='%s' "
+                #        "for update") % (notification_id)
+                # cnt = cursor.execute(sql)
 
-                result = cursor.fetchone()
-                recover_to = result.get('recover_to')
+                # result = cursor.fetchone()
+                result = dbapi.get_all_notification_list_by_notification_id_for_update(
+                    session, notification_id)
+                recover_to = result.pop().recover_to
 
                 if retry_mode is False:
-                    sql = ("select * from reserve_list "
-                           "where deleted=0 and hostname='%s' "
-                           ) % (recover_to)
-                    cnt = cursor.execute(sql)
+                    # sql = ("select * from reserve_list "
+                    #        "where deleted=0 and hostname='%s' "
+                    #        ) % (recover_to)
+                    # cnt = cursor.execute(sql)
+                    cnt = dbapi.get_all_reserve_list_by_hostname_not_deleted(
+                        session,
+                        recover_to)
 
-                    if cnt == 0:
-                        sql = ("select hostname from reserve_list "
-                               "where deleted=0 and cluster_port='%s' "
-                               "and hostname!='%s' "
-                               "order by create_at asc limit 1 for update"
-                               ) % (notification_cluster_port,
-                                    notification_hostname)
-                        cnt = cursor.execute(sql)
+                    if not cnt:
+                        # sql = ("select hostname from reserve_list "
+                        #        "where deleted=0 and cluster_port='%s' "
+                        #        "and hostname!='%s' "
+                        #        "order by create_at asc limit 1 for update"
+                        #        ) % (notification_cluster_port,
+                        #             notification_hostname)
+                        # cnt = cursor.execute(sql)
+                        cnt = dbapi.get_one_reserve_list_by_cluster_port_for_update(
+                            session,
+                            notification_cluster_port,
+                            notification_hostname
+                        )
 
-                        if cnt == 0:
+                        if not cnt:
                             self.rc_util.syslogout_ex(
                                 "RecoveryControllerStarter_0022",
                                 syslog.LOG_WARNING)
@@ -407,41 +374,49 @@ class RecoveryControllerStarter(object):
                                   "so do not recover instances."
                             self.rc_util.syslogout(msg, syslog.LOG_WARNING)
 
-                            cursor.close()
-                            conn.close()
+                            # cursor.close()
+                            # conn.close()
 
                             self.rc_util_db.update_notification_list_db(
                                 'progress', 3, notification_id)
                             return
 
-                        result = cursor.fetchone()
-                        recover_to = result.get('hostname')
+                        result = cnt.pop()
+                        recover_to = result.hostname
                         update_at = datetime.datetime.now()
-                        sql = ("update notification_list "
-                               "set update_at='%s', recover_to='%s' "
-                               "where notification_id='%s'"
-                               ) % (update_at, recover_to, notification_id)
-                        cursor.execute(sql)
+                        # sql = ("update notification_list "
+                        #        "set update_at='%s', recover_to='%s' "
+                        #        "where notification_id='%s'"
+                        #        ) % (update_at, recover_to, notification_id)
+                        # cursor.execute(sql)
+                        dbapi.update_notification_list_by_notification_id_set_recover_to(
+                            session,
+                            notification_id,
+                            update_at,
+                            recover_to
+                        )
 
                         self.rc_util.syslogout_ex(
                             "RecoveryControllerStarter_0024", syslog.LOG_INFO)
-                        self.rc_util.syslogout("SQL=" + sql, syslog.LOG_INFO)
+                        # self.rc_util.syslogout("SQL=" + sql, syslog.LOG_INFO)
 
                 self.rc_util.syslogout_ex("RecoveryControllerStarter_0015",
                                           syslog.LOG_INFO)
 
                 delete_at = datetime.datetime.now()
 
-                sql = "update reserve_list set deleted=1 , " \
-                      "delete_at='%s' " \
-                      "where hostname='%s' " \
-                      % (delete_at, recover_to)
+                # sql = "update reserve_list set deleted=1 , " \
+                #       "delete_at='%s' " \
+                #       "where hostname='%s' " \
+                #       % (delete_at, recover_to)
+                dbapi.update_reserve_list_by_hostname_as_deleted(
+                    session, recover_to, delete_at)
 
-                self.rc_util.syslogout(sql, syslog.LOG_INFO)
-                cursor.execute(sql)
+                # self.rc_util.syslogout(sql, syslog.LOG_INFO)
+                # cursor.execute(sql)
 
-                conn.commit()
-                self.rc_util_db.disconnect_database(conn, cursor)
+                # conn.commit()
+                # self.rc_util_db.disconnect_database(conn, cursor)
 
             # create semaphore (Multiplicity is get from config.)
             conf_dict = self.rc_config.get_value('recover_starter')
@@ -454,7 +429,7 @@ class RecoveryControllerStarter(object):
 
                 for vm_uuid in vm_list:
                     primary_id = self._create_vm_list_db_for_failed_host(
-                        notification_id, vm_uuid)
+                        session, notification_id, vm_uuid)
 
                     if primary_id:
                         if retry_mode == True:
@@ -487,15 +462,15 @@ class RecoveryControllerStarter(object):
                     break
 
             for vm_uuid in incomplete_list:
-                conn = None
-                cursor = None
-                conn, cursor = self.rc_util_db.connect_database()
+                # conn = None
+                # cursor = None
+                # conn, cursor = self.rc_util_db.connect_database()
 
-                table_name = 'vm_list'
-                self.rc_util_db.run_lock_query(table_name, cursor)
+                # table_name = 'vm_list'
+                # self.rc_util_db.run_lock_query(table_name, cursor)
 
                 primary_id = self.rc_util_db.insert_vm_list_db(
-                    cursor, notification_id, vm_uuid, 0)
+                    session, notification_id, vm_uuid, 0)
 
                 # Skip recovery_instance thread. Will delegate to ...
                 self.rc_util.syslogout_ex("RecoveryControllerStarter_0031",
@@ -509,27 +484,14 @@ class RecoveryControllerStarter(object):
                     args=(vm_uuid, primary_id,
                           sem_recovery_instance)).start()
 
-                self.rc_util_db.disconnect_database(conn, cursor)
+                # self.rc_util_db.disconnect_database(conn, cursor)
 
             # update record in notification_list
             self.rc_util_db.update_notification_list_db(
-                'progress', 2, notification_id)
+                session, 'progress', 2, notification_id)
 
             return
 
-        except MySQLdb.Error:
-            self.rc_util.syslogout_ex("RecoveryControllerStarter_0016",
-                                      syslog.LOG_ERR)
-            error_type, error_value, traceback_ = sys.exc_info()
-            tb_list = traceback.format_tb(traceback_)
-            self.rc_util.syslogout(error_type, syslog.LOG_ERR)
-            self.rc_util.syslogout(error_value, syslog.LOG_ERR)
-            for tb in tb_list:
-                self.rc_util.syslogout(tb, syslog.LOG_ERR)
-            self.rc_util_db.update_notification_list_db(
-                'progress', 5, notification_id)
-            self.rc_util_db.disconnect_database(conn, cursor)
-            return
         except KeyError:
             self.rc_util.syslogout_ex("RecoveryControllerStarter_0017",
                                       syslog.LOG_ERR)
@@ -551,7 +513,7 @@ class RecoveryControllerStarter(object):
                 self.rc_util.syslogout(tb, syslog.LOG_ERR)
             return
 
-    def _update_old_records_vm_list(self, conn, cursor):
+    def _update_old_records_vm_list(self, session):
         conf_dict = self.rc_config.get_value('recover_starter')
         notification_expiration_sec = int(conf_dict.get(
             'notification_expiration_sec'))
@@ -560,17 +522,22 @@ class RecoveryControllerStarter(object):
             datetime.timedelta(seconds=notification_expiration_sec)
         border_time_str = border_time.strftime('%Y-%m-%d %H:%M:%S')
 
-        sql = "SELECT id FROM vm_list " \
-              "WHERE (progress = 0 AND create_at < '%s') " \
-              "OR (progress = 1 AND update_at < '%s')" \
-              % (border_time_str, border_time_str)
+        # sql = "SELECT id FROM vm_list " \
+        #       "WHERE (progress = 0 AND create_at < '%s') " \
+        #       "OR (progress = 1 AND update_at < '%s')" \
+        #       % (border_time_str, border_time_str)
 
         self.rc_util.syslogout_ex("RecoveryControllerStarter_0026",
                                   syslog.LOG_INFO)
-        self.rc_util.syslogout("SQL=" + sql, syslog.LOG_INFO)
+        # self.rc_util.syslogout("SQL=" + sql, syslog.LOG_INFO)
 
-        cursor.execute(sql)
-        result = cursor.fetchall()
+        # cursor.execute(sql)
+        # result = cursor.fetchall()
+        result = dbapi.get_old_records_vm_list(
+            session,
+            border_time_str,
+            border_time_str
+        )
         self.rc_util.syslogout(result, syslog.LOG_INFO)
 
         if result:
@@ -581,43 +548,53 @@ class RecoveryControllerStarter(object):
 
             # Set progress = 4 for old record
             for row in result:
-                sql = "UPDATE vm_list " \
-                      "SET progress = %d, update_at = '%s', " \
-                      "delete_at = '%s' " \
-                      "WHERE id = '%s'" \
-                      % (4, datetime.datetime.now(),
-                         datetime.datetime.now(), row.get('id'))
+                # sql = "UPDATE vm_list " \
+                #       "SET progress = %d, update_at = '%s', " \
+                #       "delete_at = '%s' " \
+                #       "WHERE id = '%s'" \
+                #       % (4, datetime.datetime.now(),
+                #          datetime.datetime.now(), row.get('id'))
+                update_val = {'progress': 4,
+                              'update_at': datetime.datetime.now(),
+                              'delete_at': datetime.datetime.now()
+                              }
+                dbapi.update_vm_list_by_id_dict(session, row.id, update_val)
                 self.rc_util.syslogout_ex("RecoveryControllerStarter_0036",
                                           syslog.LOG_INFO)
-                self.rc_util.syslogout('SQL=' + sql, syslog.LOG_INFO)
-                cursor.execute(sql)
-                conn.commit()
+                # self.rc_util.syslogout('SQL=' + sql, syslog.LOG_INFO)
+                # cursor.execute(sql)
+                # conn.commit()
 
-    def _find_reprocessing_records_vm_list(self, conn, cursor):
+    def _find_reprocessing_records_vm_list(self, session):
         return_value = []
 
         # Find reprocessing uuid
-        sql = "SELECT DISTINCT uuid FROM vm_list " \
-              "WHERE progress = 0 OR progress = 1"
-        self.rc_util.syslogout_ex("RecoveryControllerStarter_0037",
-                                  syslog.LOG_INFO)
-        self.rc_util.syslogout("SQL=" + sql, syslog.LOG_INFO)
-        cursor.execute(sql)
-        result = cursor.fetchall()
+        # sql = "SELECT DISTINCT uuid FROM vm_list " \
+        #       "WHERE progress = 0 OR progress = 1"
+        # self.rc_util.syslogout_ex("RecoveryControllerStarter_0037",
+        #                           syslog.LOG_INFO)
+        # self.rc_util.syslogout("SQL=" + sql, syslog.LOG_INFO)
+        # cursor.execute(sql)
+        # result = cursor.fetchall()
+        result = dbapi.get_all_vm_list_by_progress(session)
 
         # UUID to see one by one, and look for the re-processing target record
         for row in result:
-            sql = "SELECT id, uuid FROM vm_list " \
-                  "WHERE uuid = '%s' " \
-                  "AND (progress = 0 OR progress = 1) " \
-                  "ORDER BY recover_by ASC, create_at DESC" \
-                  % (row.get("uuid"))
-            self.rc_util.syslogout_ex("RecoveryControllerStarter_0038",
-                                      syslog.LOG_INFO)
-            self.rc_util.syslogout("SQL=" + sql, syslog.LOG_INFO)
+            # sql = "SELECT id, uuid FROM vm_list " \
+            #       "WHERE uuid = '%s' " \
+            #       "AND (progress = 0 OR progress = 1) " \
+            #       "ORDER BY recover_by ASC, create_at DESC" \
+            #       % (row.get("uuid"))
+            # self.rc_util.syslogout_ex("RecoveryControllerStarter_0038",
+            #                           syslog.LOG_INFO)
+            # self.rc_util.syslogout("SQL=" + sql, syslog.LOG_INFO)
 
-            cursor.execute(sql)
-            result2 = cursor.fetchall()
+            # cursor.execute(sql)
+            # result2 = cursor.fetchall()
+            result2 = dbapi.get_vm_list_by_uuid_and_progress_sorted(
+                session,
+                row.uuid
+            )
 
             row_cnt = 0
             for row2 in result2:
@@ -626,17 +603,27 @@ class RecoveryControllerStarter(object):
                     return_value.append(row2)
                 # Update progress that is not the re-processing target
                 else:
-                    sql = "UPDATE vm_list " \
-                          "SET progress = %d, update_at = '%s', " \
-                          "delete_at = '%s' " \
-                          "WHERE id = %s" \
-                        % (4, datetime.datetime.now(),
-                           datetime.datetime.now(), row2.get("id"))
-                    self.rc_util.syslogout_ex("RecoveryControllerStarter_0039",
-                                              syslog.LOG_INFO)
-                    self.rc_util.syslogout("SQL=" + sql, syslog.LOG_INFO)
-                    cursor.execute(sql)
-                    conn.commit()
+                    # sql = "UPDATE vm_list " \
+                    #       "SET progress = %d, update_at = '%s', " \
+                    #       "delete_at = '%s' " \
+                    #       "WHERE id = %s" \
+                    #     % (4, datetime.datetime.now(),
+                    #        datetime.datetime.now(), row2.get("id"))
+                    self.rc_util.syslogout_ex(
+                        "RecoveryControllerStarter_0039", syslog.LOG_INFO)
+                    # self.rc_util.syslogout("SQL=" + sql, syslog.LOG_INFO)
+                    # cursor.execute(sql)
+                    # conn.commit()
+                    update_val = {'progress': 4,
+                                  'update_at': datetime.datetime.now(),
+                                  'delete_at': datetime.datetime.now()
+                                  }
+
+                    dbapi.update_vm_list_by_id_dict(
+                        session,
+                        row2.id,
+                        update_val
+                    )
 
                 row_cnt += 1
 
@@ -649,15 +636,17 @@ class RecoveryControllerStarter(object):
         of outstanding recovery VM at startup.
         """
         try:
-            conn = None
-            cursor = None
+            db_engine = dbapi.get_engine()
+            session = dbapi.get_session(db_engine)
+            # conn = None
+            # cursor = None
             # Get database session
-            conn, cursor = self.rc_util_db.connect_database()
+            # conn, cursor = self.rc_util_db.connect_database()
 
-            self._update_old_records_vm_list(conn, cursor)
-            result = self._find_reprocessing_records_vm_list(conn, cursor)
+            self._update_old_records_vm_list(session)
+            result = self._find_reprocessing_records_vm_list(session)
 
-            self.rc_util_db.disconnect_database(conn, cursor)
+            # self.rc_util_db.disconnect_database(conn, cursor)
 
             # [recover_starter]section
             recover_starter_dic = self.rc_config.get_value("recover_starter")
@@ -687,17 +676,6 @@ class RecoveryControllerStarter(object):
             else:
                 return
 
-            return
-        except MySQLdb.Error:
-            self.rc_util.syslogout_ex("RecoveryControllerStarter_0019",
-                                      syslog.LOG_ERR)
-            error_type, error_value, traceback_ = sys.exc_info()
-            tb_list = traceback.format_tb(traceback_)
-            self.rc_util.syslogout(error_type, syslog.LOG_ERR)
-            self.rc_util.syslogout(error_value, syslog.LOG_ERR)
-            for tb in tb_list:
-                self.rc_util.syslogout(tb, syslog.LOG_ERR)
-            self.rc_util_db.disconnect_database(conn, cursor)
             return
         except KeyError:
             self.rc_util.syslogout_ex("RecoveryControllerStarter_0020",

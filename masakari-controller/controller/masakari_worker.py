@@ -32,6 +32,14 @@ from eventlet import greenthread
 # conficlt with _do_action_db(self, config, sql):
 #import masakari_config as config
 import masakari_util as util
+import os
+parentdir = os.path.abspath(os.path.join(os.path.dirname(__file__),
+                                         os.path.pardir))
+# rootdir = os.path.abspath(os.path.join(parentdir, os.path.pardir))
+# project root directory needs to be add at list head rather than tail
+# this file named 'masakari' conflicts to the directory name
+sys.path = [parentdir] + sys.path
+import db.api as dbapi
 
 
 class RecoveryControllerWorker(object):
@@ -116,24 +124,25 @@ class RecoveryControllerWorker(object):
 
         return vm_info
 
-    def _get_vmha_param(self, uuid, primary_id):
+    def _get_vmha_param(self, session, uuid, primary_id):
         # TODO(sampath): remove unused 'uuid' form args
         try:
             # Get need recovery infomation.
-            sql = "SELECT recover_by, recover_to " \
-                  "FROM vm_list " \
-                  "WHERE id = %s" \
-                  % (primary_id)
+            # sql = "SELECT recover_by, recover_to " \
+            #       "FROM vm_list " \
+            #       "WHERE id = %s" \
+            #       % (primary_id)
 
-            conf_db_dic = self.rc_config.get_value('db')
-            recover_data = self._do_action_db(conf_db_dic, sql)
+            # conf_db_dic = self.rc_config.get_value('db')
+            # recover_data = self._do_action_db(conf_db_dic, sql)
+            recover_data = dbapi.get_vm_list_by_id(session, primary_id)
 
             if recover_data is None:
                 raise EnvironmentError("Failed to recovery info.")
 
             # Set return values.
-            recover_by = recover_data.get('recover_by')
-            recover_to = recover_data.get('recover_to')
+            recover_by = recover_data.recover_by
+            recover_to = recover_data.recover_to
 
         except EnvironmentError:
             self.rc_util.syslogout_ex("RecoveryControllerWorker_0007",
@@ -155,16 +164,6 @@ class RecoveryControllerWorker(object):
             for tb in tb_list:
                 self.rc_util.syslogout(tb, syslog.LOG_ERR)
             raise KeyError
-        except MySQLdb.Error:
-            self.rc_util.syslogout_ex("RecoveryControllerWorker_0009",
-                                      syslog.LOG_ERR)
-            error_type, error_value, traceback_ = sys.exc_info()
-            tb_list = traceback.format_tb(traceback_)
-            self.rc_util.syslogout(error_type, syslog.LOG_ERR)
-            self.rc_util.syslogout(error_value, syslog.LOG_ERR)
-            for tb in tb_list:
-                self.rc_util.syslogout(tb, syslog.LOG_ERR)
-            raise MySQLdb.Error
         except:
             self.rc_util.syslogout_ex("RecoveryControllerWorker_0010",
                                       syslog.LOG_ERR)
@@ -178,7 +177,7 @@ class RecoveryControllerWorker(object):
 
         return recover_by, recover_to
 
-    def _execute_recovery(self, uuid, vm_state, HA_Enabled,
+    def _execute_recovery(self, session, uuid, vm_state, HA_Enabled,
                           recover_by, recover_to):
 
         # Initalize status.
@@ -191,6 +190,7 @@ class RecoveryControllerWorker(object):
                         vm_state == 'stopped' or \
                         vm_state == 'resized':
                     res = self._do_node_accident_vm_recovery(
+                        session,
                         uuid, vm_state, recover_to)
                 else:
                     self.rc_util.syslogout_ex("RecoveryControllerWorker_0041",
@@ -215,7 +215,8 @@ class RecoveryControllerWorker(object):
 
         return res
 
-    def _do_node_accident_vm_recovery(self, uuid, vm_state, evacuate_node):
+    def _do_node_accident_vm_recovery(self, session,
+                                      uuid, vm_state, evacuate_node):
 
         try:
             # Initalize status.
@@ -692,6 +693,8 @@ class RecoveryControllerWorker(object):
            :param hostname: Host name of brocade target
         """
         try:
+            db_engine = dbapi.get_engine()
+            session = dbapi.get_session(db_engine)
             rc, rbody = self.rc_util_api.do_host_maintenance_mode(hostname,
                                                                   'disable')
             if rc != '200':
@@ -703,18 +706,9 @@ class RecoveryControllerWorker(object):
 
             if update_progress is True:
                 self.rc_util_db.update_notification_list_db(
+                    session,
                     'progress', 2, notification_id)
 
-        except MySQLdb.Error:
-            self.rc_util.syslogout_ex("RecoveryControllerWorker_0030",
-                                      syslog.LOG_ERR)
-            error_type, error_value, traceback_ = sys.exc_info()
-            tb_list = traceback.format_tb(traceback_)
-            self.rc_util.syslogout(error_type, syslog.LOG_ERR)
-            self.rc_util.syslogout(error_value, syslog.LOG_ERR)
-            for tb in tb_list:
-                self.rc_util.syslogout(tb, syslog.LOG_ERR)
-            return
         except KeyError:
             self.rc_util.syslogout_ex("RecoveryControllerWorker_0031",
                                       syslog.LOG_ERR)
@@ -745,12 +739,15 @@ class RecoveryControllerWorker(object):
         """
         try:
             sem.acquire()
+            db_engine = dbapi.get_engine()
+            session = dbapi.get_session(db_engine)
 
             # Initlize status.
             status = self.STATUS_NORMAL
 
             # Update vmha recovery status.
-            self.rc_util_db.update_vm_list_db('progress', 1, primary_id)
+            self.rc_util_db.update_vm_list_db(
+                session, 'progress', 1, primary_id)
 
             # Get vm infomation.
             vm_info = self._get_vm_param(uuid)
@@ -764,12 +761,14 @@ class RecoveryControllerWorker(object):
             exe_param = {}
             exe_param['vm_state'] = vm_info.get('OS-EXT-STS:vm_state')
             exe_param['HA-Enabled'] = HA_Enabled
-            recover_by, recover_to = self._get_vmha_param(uuid, primary_id)
+            recover_by, recover_to = self._get_vmha_param(
+                session, uuid, primary_id)
             exe_param['recover_by'] = recover_by
             exe_param['recover_to'] = recover_to
 
             # Execute.
-            status = self._execute_recovery(uuid,
+            status = self._execute_recovery(session,
+                                            uuid,
                                             exe_param.get("vm_state"),
                                             exe_param.get("HA-Enabled"),
                                             exe_param.get("recover_by"),
@@ -824,12 +823,12 @@ class RecoveryControllerWorker(object):
                 # Successful execution.
                 if status == self.STATUS_NORMAL:
                     self.rc_util_db.update_vm_list_db(
-                        'progress', 2, primary_id)
+                        session, 'progress', 2, primary_id)
 
                 # Abnormal termination.
                 else:
                     self.rc_util_db.update_vm_list_db(
-                        'progress', 3, primary_id)
+                        session, 'progress', 3, primary_id)
 
                 # Release semaphore
                 if sem:

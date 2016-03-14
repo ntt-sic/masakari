@@ -168,10 +168,32 @@ def get_one_vm_list_by_uuid_and_progress_create_at_last(session,
             desc(VmList.create_at)).first()
 
 
+def get_vm_list_by_uuid_and_progress_sorted(session, notification_uuid):
+    # sql = "SELECT id, uuid FROM vm_list " \
+    #       "WHERE uuid = '%s' " \
+    #       "AND (progress = 0 OR progress = 1) " \
+    #       "ORDER BY recover_by ASC, create_at DESC" \
+    #       % (row.get("uuid"))
+    return session.query(VmList).filter_by(
+        uuid=notification_uuid).filter(or_(
+            VmList.progress == 0, VmList.progress == 1)).order_by(
+                asc(VmList.recover_by), desc(VmList.create_at)
+    ).all()
+
+
+def get_vm_list_by_id(session, id):
+    # sql = "SELECT recover_by, recover_to " \
+    #               "FROM vm_list " \
+    #               "WHERE id = %s" \
+    #               % (primary_id)
+    return session.query(VmList.recover_by, VmList.recover_to).filter_by(
+        id=id).one()
+
+
 def get_all_vm_list_by_progress(session):
     # SELECT uuid FROM vm_list WHERE progress = 0 or progress = 1
-    return session.query(VmList).filter(
-        or_(VmList.progress == 0, VmList.progress == 1)).all()
+    return session.query(VmList.uuid).filter(
+        or_(VmList.progress == 0, VmList.progress == 1)).distinct().all()
 
 
 def update_vm_list_by_id_dict(session, id, update_val):
@@ -316,4 +338,16 @@ def get_notification_list_distinct_hostname(session):
 def update_notification_list_dict(session, notification_id, update_val):
     cnt = session.query(NotificationList).filter_by(
         notification_id=notification_id).update(update_val)
+    return cnt
+
+
+def get_old_records_vm_list(session, create_at, update_at):
+    # sql = "SELECT id FROM vm_list " \
+    #       "WHERE (progress = 0 AND create_at < '%s') " \
+    #       "OR (progress = 1 AND update_at < '%s')" \
+    #       % (border_time_str, border_time_str)
+    cnt = session.query(VmList).filter(
+        VmList.progress == 0,
+        VmList.create_at < create_at,
+        VmList.update_at < update_at).all()
     return cnt
