@@ -1,6 +1,6 @@
 include AUTHORS
 include ChangeLog
-include requirements.txt README
+include requirements.txt README.md
 recursive-include controller *.py
 recursive-include etc *
 recursive-include init.d *
