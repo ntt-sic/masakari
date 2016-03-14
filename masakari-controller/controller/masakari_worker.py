@@ -211,12 +211,7 @@ class RecoveryControllerWorker(object):
             # state. If an instance is in resized status, masakari resets the
             # instance state to *error* to evacuate it.
             if vm_state == 'resized':
-                rc, rbody = self.rc_util_api.do_instance_reset(uuid, 'error')
-                if rc != '202':
-                    rbody = json.loads(rbody)
-                    msg = '%s(code:%s)' % (rbody.get('error').get(
-                        'message'), rbody.get('error').get('code'))
-                    raise EnvironmentError(msg)
+                self.rc_util_api.do_instance_reset(uuid, 'error')
 
             # Execute recovery(Call nova evacuate API).
             rc, rbody = self.rc_util_api.do_instance_evacuate(
@@ -287,13 +282,7 @@ class RecoveryControllerWorker(object):
         status = self.STATUS_NORMAL
 
         try:
-            # Call nova reset-state API(do not wait for sync).
-            rc, rbody = self.rc_util_api.do_instance_reset(uuid, 'error')
-            if rc != '202':
-                rbody = json.loads(rbody)
-                msg = '%s(code:%s)' % (rbody.get('error').get(
-                    'message'), rbody.get('error').get('code'))
-                raise EnvironmentError(msg)
+            self.rc_util_api.do_instance_reset(uuid, 'error')
 
             self.rc_util.syslogout_ex("RecoveryControllerWorker_0017",
                                       syslog.LOG_INFO)
@@ -336,22 +325,11 @@ class RecoveryControllerWorker(object):
             # since there is no instance on the hypervisor. However,
             # in some race conditions, it could happen.
             if vm_state == 'stopped':
-                rc, rbody = self.rc_util_api.do_instance_reset(
-                    uuid, 'stopped')
-                if rc != '202':
-                    rbody = json.loads(rbody)
-                    msg = '%s(code:%s)' % (rbody.get('error').get(
-                        'message'), rbody.get('error').get('code'))
-                    raise EnvironmentError(msg)
+                self.rc_util_api.do_instance_reset(uuid, 'stopped')
                 return status
 
             if vm_state == 'resized':
-                rc, rbody = self.rc_util_api.do_instance_reset(uuid, 'error')
-                if rc != '202':
-                    rbody = json.loads(rbody)
-                    msg = '%s(code:%s)' % (rbody.get('error').get(
-                        'message'), rbody.get('error').get('code'))
-                    raise EnvironmentError(msg)
+                self.rc_util_api.do_instance_reset(uuid, 'active')
 
             self.rc_util_api.do_instance_stop(uuid)
 
@@ -405,13 +383,7 @@ class RecoveryControllerWorker(object):
         status = self.STATUS_NORMAL
 
         try:
-            # Call nova reset-state API.
-            rc, rbody = self.rc_util_api.do_instance_reset(uuid, 'error')
-            if rc != '202':
-                rbody = json.loads(rbody)
-                msg = '%s(code:%s)' % (rbody.get('error').get(
-                    'message'), rbody.get('error').get('code'))
-                raise EnvironmentError(msg)
+            self.rc_util_api.do_instance_reset(uuid, 'error')
 
             # Call nova stop API.
             self.rc_util_api.do_instance_stop(uuid)
