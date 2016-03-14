@@ -353,13 +353,7 @@ class RecoveryControllerWorker(object):
                         'message'), rbody.get('error').get('code'))
                     raise EnvironmentError(msg)
 
-            # Call nova stop API.
-            rc, rbody = self.rc_util_api.do_instance_stop(uuid)
-            if rc != '202':
-                rbody = json.loads(rbody)
-                msg = '%s(code:%s)' % (rbody.get('error').get(
-                    'message'), rbody.get('error').get('code'))
-                raise EnvironmentError(msg)
+            self.rc_util_api.do_instance_stop(uuid)
 
             # Wait to be in the Stopped.
             conf_dic = self.rc_config.get_value('recover_starter')
@@ -454,44 +448,11 @@ class RecoveryControllerWorker(object):
                 raise EnvironmentError(msg)
 
             # Call nova stop API.
-            rc, rbody = self.rc_util_api.do_instance_stop(uuid)
-            if rc != '202' and rc != '409':
-                rbody = json.loads(rbody)
-                msg = '%s(code:%s)' % (rbody.get('error').get(
-                    'message'), rbody.get('error').get('code'))
-                raise EnvironmentError(msg)
-            elif rc == '409':
-                rbody = json.loads(rbody)
-                return_message = rbody.get('conflictingRequest').get(
-                    'message')
+            self.rc_util_api.do_instance_stop(uuid)
 
-                ignore_message_list = []
-                # juno
-                ignore_message_list.append(
-                    "in vm_state stopped. "
-                    "Cannot stop while the instance "
-                    "is in this state.")
-                # kilo
-                ignore_message_list.append(
-                    "while it is in vm_state stopped")
-
-                def msg_filter(return_message, ignore_message_list):
-                    # TODO(sampath)
-                    # see the previous comment for def msg_filter
-                    for ignore_message in ignore_message_list:
-                        if ignore_message in return_message:
-                            return True
-                    return False
-
-                if not msg_filter(return_message, ignore_message_list):
-                    msg = '%s(code:%s)' % (return_message, rc)
-                    raise EnvironmentError(msg)
-
-            self.rc_util.syslogout_ex("RecoveryControllerWorker_0022",
-                                      syslog.LOG_INFO)
-            msg = "Skipped recovery. " \
-                  "instance_id:%s, " \
-                  "accident type: [qemu process accident]." % (uuid)
+            msg = "[RecoveryControllerWorker_0022]"
+            msg += ("Skipped recovery. instance_id:%s, "
+                    "accident type: [qemu process accident]." % uuid)
             self.rc_util.syslogout(msg, syslog.LOG_INFO)
 
         except EnvironmentError:
