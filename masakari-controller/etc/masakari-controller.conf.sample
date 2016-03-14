@@ -2,6 +2,7 @@
 server_port = 15868
 
 [db]
+driver = mysql
 host = 192.168.60.101
 name = vm_ha
 user = root

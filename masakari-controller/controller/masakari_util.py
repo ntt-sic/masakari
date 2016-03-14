@@ -1,4 +1,4 @@
-x3  # !/usr/bin/env python
+# !/usr/bin/env python
 # -*- coding: utf-8 -*-
 
 # Copyright(c) 2015 Nippon Telegraph and Telephone Corporation

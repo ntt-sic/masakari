@@ -152,9 +152,8 @@ class RecoveryController(object):
                             "RecoveryController_0035", syslog.LOG_INFO)
                         dic = self.rc_config.get_value('recover_starter')
                         node_err_wait = dic.get("node_err_wait")
-                        msg = "Sleeping " + node_err_wait +
-                        " sec before starting node recovery thread," +
-                        " until updateing nova-compute service status."
+                        msg = "Sleeping %s sec before starting node recovery thread, until updateing nova-compute service status." % (
+                            node_err_wait)
                         self.rc_util.syslogout(msg, syslog.LOG_INFO)
                         greenthread.sleep(int(node_err_wait))
 
@@ -178,7 +177,8 @@ class RecoveryController(object):
                         # insted call rc_starter.add_failed_instance
                         th = threading.Thread(
                             target=self.rc_starter.add_failed_instance,
-                            args=(row.notification_id, row.notification_uuid, ))
+                            args=(row.notification_id,
+                                  row.notification_uuid, ))
                         th.start()
 
                     else:
@@ -445,9 +445,8 @@ class RecoveryController(object):
                             "RecoveryController_0029", syslog.LOG_INFO)
                         dic = self.rc_config.get_value('recover_starter')
                         node_err_wait = dic.get("node_err_wait")
-                        msg = "Sleeping " + node_err_wait +
-                        "sec before starting recovery thread," +
-                        " until nova recognizes the node down..."
+                        msg = "Sleeping %s sec before starting recovery thread until nova recognizes the node down..." % (
+                            node_err_wait)
                         self.rc_util.syslogout(msg, syslog.LOG_INFO)
                         greenthread.sleep(int(node_err_wait))
 

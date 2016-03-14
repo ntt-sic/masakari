@@ -22,7 +22,7 @@ from sqlalchemy import create_engine
 from sqlalchemy_utils.functions import database_exists, create_database
 from controller.masakari_config import RecoveryControllerConfig
 from db.models import Base
-
+from db import api as dbapi
 
 try:
     # retrieve configuration parameters
@@ -36,16 +36,18 @@ try:
 except Exception as e:
     # error handling
     print "failed to load configuration parameters."
-    print "Exception: " , e
+    print "Exception: ", e
     sys.exit(1)
 
 print "host:", host, "db:", db, "user:", user, "passwd:", passwd, "charset:", charset
 
 try:
     # URL looks like this, "mysql://scott:tiger@localhost/test?charset=utf8"
-    url = 'mysql://' + user + ':' + passwd + '@' + host + '/' + db + '?' + 'charset=' + charset
+    # url = 'mysql://' + user + ':' + passwd + '@' + \
+    #     host + '/' + db + '?' + 'charset=' + charset
     # Create an engine to store data in the database
-    engine = create_engine(url, echo=True)
+    engine = dbapi.get_engine()
+    # engine = create_engine(url, echo=True)
     # Create database if not exists
     if not database_exists(engine.url):
         create_database(engine.url)
@@ -54,7 +56,7 @@ try:
 except Exception as e:
     # error handling
     print "failed to create tables."
-    print "Exception: " , e
+    print "Exception: ", e
     sys.exit(2)
 
 print "Successfully created tables"

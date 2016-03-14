@@ -89,6 +89,7 @@ class RecoveryControllerConfig(object):
 
     def _set_db_section(self, inifile):
         conf_db = {}
+        conf_db['drivername'] = inifile.get('db', 'drivername')
         conf_db['host'] = inifile.get('db', 'host')
         conf_db['name'] = inifile.get('db', 'name')
         conf_db['user'] = inifile.get('db', 'user')

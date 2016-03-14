@@ -17,7 +17,7 @@ Definition of interfaces to access database and helper methods
  to handle SQLAlchemy session
 """
 
-from sqlalchemy import create_engine, or_
+from sqlalchemy import engine, create_engine, or_
 from sqlalchemy.orm import sessionmaker
 from sqlalchemy.sql.expression import desc
 from models import NotificationList, VmList, ReserveList
@@ -43,14 +43,50 @@ def get_engine():
     rc_config = config.RecoveryControllerConfig()
     # Connect db
     conf_db_dic = rc_config.get_value('db')
+    """
+    Possible values for db drivername is,
+     'drizzle',
+     'firebird',
+     'informix',
+     'mssql',
+     'mysql',
+     'postgresql',
+     'sqlite',
+     'oracle',
+     'sybase'
+    sqlite is only for testing..
+    """
+
     # URL looks like this, "mysql://scott:tiger@localhost/test?charset=utf8"
-    url = 'mysql://'\
-          + conf_db_dic.get("user") + ':' + conf_db_dic.get("passwd") +\
-          '@' + conf_db_dic.get("host") +\
-          '/' + conf_db_dic.get("name") +\
-          '?' + 'charset=' + conf_db_dic.get("charset")
-    engine = create_engine(url)
-    return engine
+    # url = 'mysql://'\
+    #       + conf_db_dic.get("user") + ':' + conf_db_dic.get("passwd") +\
+    #       '@' + conf_db_dic.get("host") +\
+    #       '/' + conf_db_dic.get("name") +\
+    #       '?' + 'charset=' + conf_db_dic.get("charset")
+    drivername = conf_db_dic.get("drivername", "mysql")
+    print conf_db_dic.get("drivername")
+    print "drivername is %s" % (drivername)
+    charset = conf_db_dic.get("charset")
+    if drivername is "postgresql":
+        query = {'client_encoding': charset}
+    elif drivername is "mysql":
+        query = {'charset': charset}
+    else:
+        query = {}
+    if drivername != 'sqlite':
+        dburl = engine.url.URL(
+            drivername=drivername,
+            database=conf_db_dic.get("name"),
+            username=conf_db_dic.get("user"),
+            password=conf_db_dic.get("passwd"),
+            host=conf_db_dic.get("host"),
+            port=conf_db_dic.get("port", None),
+            query=query
+        )
+        eng = create_engine(dburl)
+    else:
+        eng = create_engine('sqlite:////tmp/msakari.db', echo=True)
+    return eng
 
 
 def get_session(engine):
