@@ -374,41 +374,7 @@ class RecoveryControllerWorker(object):
                 msg = "vm_state did not become stopped."
                 raise EnvironmentError(msg)
 
-            # Call nova start API.
-            rc, rbody = self.rc_util_api.do_instance_start(uuid)
-
-            if rc != '202' and rc != '409':
-                rbody = json.loads(rbody)
-                msg = '%s(code:%s)' % (rbody.get('error').get(
-                        'message'), rbody.get('error').get('code'))
-                raise EnvironmentError(msg)
-            elif rc == '409':
-                rbody = json.loads(rbody)
-                return_message = rbody.get('conflictingRequest').get(
-                    'message')
-                ignore_message_list = []
-                #  juno
-                ignore_message_list.append(
-                    "in vm_state active. "
-                    "Cannot start while the instance "
-                    "is in this state.")
-                # kilo
-                ignore_message_list.append(
-                    "while it is in vm_state active")
-
-                def msg_filter(return_message, ignore_message_list):
-                    #TODO(sampath):
-                    # Make this simple and opnestak version independet
-                    # This patch is to absorb the message diff in juno and kilo
-                    # juno message
-                    for ignore_message in ignore_message_list:
-                        if ignore_message in return_message:
-                            return True
-                    return False
-
-                if not msg_filter(return_message, ignore_message_list):
-                    msg = '%s(code:%s)' % (return_message, rc)
-                    raise EnvironmentError(msg)
+            self.rc_util_api.do_instance_start(uuid)
 
         except EnvironmentError:
             self.rc_util.syslogout_ex("RecoveryControllerWorker_0020",

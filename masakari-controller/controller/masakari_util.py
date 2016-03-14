@@ -591,7 +591,7 @@ class RecoveryControllerUtilApi(object):
     def do_instance_stop(self, uuid):
         """Call Nova instance stop API.
 
-        :param :uuid : Instance id to be used in nova cliant curl.
+        :param :uuid : Instance id
         :return : None if succeed
         """
         try:
@@ -612,46 +612,27 @@ class RecoveryControllerUtilApi(object):
             raise
 
     def do_instance_start(self, uuid):
-        """
-        API-start. Edit the body of the curl
-        is performed using the nova client.
-        :uuid : Instance id to be used in nova cliant curl.
-        :return :response_code :response code
-        :return :rbody :response body(json)
+        """Call Nova instance start API.
+
+        :uuid : Instance id
+        :return : None if succeed
         """
         try:
+            self.rc_util.syslogout('Call Start API with %s' % uuid,
+                                   syslog.LOG_INFO)
+            self.nova_client.servers.start(uuid)
 
-            # Set nova_curl_method
-            nova_curl_method = "POST"
-            # Set nova_variable_url
-            nova_variable_url = "/servers/" + uuid + "/action"
-            # Set nova_body
-            nova_body = "{\"os-start\" : null}"
+        except exceptions.Conflict as e:
+            msg = "Server instance %s is already in active." % uuid
+            error_msg = "Original Nova client's error: %e" % e
+            self.rc_util.syslogout(msg + error_msg, syslog.LOG_ERR)
+            raise EnvironmentError(msg)
 
-            response_code, rbody = self._nova_curl_client(nova_curl_method,
-                                                          nova_variable_url,
-                                                          nova_body)
-
-        except:
-            self.rc_util.syslogout_ex("RecoveryControllerUtilApi_0003",
-                                      syslog.LOG_ERR)
-            error_type, error_value, traceback_ = sys.exc_info()
-            tb_list = traceback.format_tb(traceback_)
-            self.rc_util.syslogout(error_type, syslog.LOG_ERR)
-            self.rc_util.syslogout(error_value, syslog.LOG_ERR)
-            for tb in tb_list:
-                self.rc_util.syslogout(tb, syslog.LOG_ERR)
-
-            msg = "[ nova_curl_method=" + nova_curl_method + " ]"
-            self.rc_util.syslogout(msg, syslog.LOG_ERR)
-            msg = "[ nova_variable_url=" + nova_variable_url + " ]"
-            self.rc_util.syslogout(msg, syslog.LOG_ERR)
-            msg = "[ nova_body=" + nova_body + " ]"
-            self.rc_util.syslogout(msg, syslog.LOG_ERR)
-
+        except exceptions.ClientException as e:
+            error_code = "[RecoveryControllerUtilApi_0003]"
+            msg = 'Fails to call Nova Server Start API: %s' % e
+            self.rc_util.syslogout(error_code + msg, syslog.LOG_ERR)
             raise
-
-        return response_code, rbody
 
     def do_instance_reset(self, uuid, status):
         """
