@@ -280,20 +280,8 @@ class RecoveryControllerStarter(object):
             recovery_max_retry_cnt = conf_dict.get('recovery_max_retry_cnt')
             recovery_retry_interval = conf_dict.get('recovery_retry_interval')
 
-            rc, rbody = self.rc_util_api.do_hypervisor_servers(
+            vm_list = self.rc_util_api.fetch_servers_on_hypervisor(
                 notification_hostname)
-
-            # Get vm_list from rbody
-            vm_list = []
-            rbody_dict = json.loads(rbody)
-            hypervisors_list = rbody_dict.get("hypervisors")
-            for i in range(0, len(hypervisors_list)):
-                hypervisors_dict = hypervisors_list[i]
-                servers_list = hypervisors_dict.get("servers")
-                if servers_list is not None:
-                    for j in range(0, len(servers_list)):
-                        servers_dict = servers_list[j]
-                        vm_list.append(servers_dict.get("uuid"))
 
             # Count vm_list
             if len(vm_list) == 0:

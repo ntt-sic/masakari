@@ -651,43 +651,28 @@ class RecoveryControllerUtilApi(object):
             self.rc_util.syslogout(error_code + msg, syslog.LOG_ERR)
             raise EnvironmentError(msg)
 
-    def do_hypervisor_servers(self, hypervisor_hostname):
+    def fetch_servers_on_hypervisor(self, hypervisor):
+        """Fetch server instance list on the hypervisor.
+
+        :hypervisor : hypervisor's hostname
+        :return : A list of servers
         """
-        API_hypervisor_servers. Edit the body of the curl is
-        performed using the nova client.
-        :hypervisor_hostname : The name of the host that runs the hypervisor.
-        :return :response_code :response code
-        :return :rbody :response body(json)
-        """
+        opts = {
+            'host': hypervisor,
+            'all_tenants': True,
+            }
         try:
+            self.rc_util.syslogout('Fetch Server list on %s' % hypervisor,
+                                   syslog.LOG_INFO)
+            servers = self.nova_client.servers.list(detailed=False,
+                                                    search_opts=opts)
+            return [s.id for s in servers]
 
-            # Set nova_curl_method
-            nova_curl_method = "GET"
-            # Set nova_variable_url
-            nova_variable_url = "/os-hypervisors/" + \
-                hypervisor_hostname + "/servers"
-
-            response_code, rbody = self._nova_curl_client(nova_curl_method,
-                                                          nova_variable_url)
-
-        except:
-            self.rc_util.syslogout_ex("RecoveryControllerUtilApi_0005",
-                                      syslog.LOG_ERR)
-            error_type, error_value, traceback_ = sys.exc_info()
-            tb_list = traceback.format_tb(traceback_)
-            self.rc_util.syslogout(error_type, syslog.LOG_ERR)
-            self.rc_util.syslogout(error_value, syslog.LOG_ERR)
-            for tb in tb_list:
-                self.rc_util.syslogout(tb, syslog.LOG_ERR)
-
-            msg = "[ nova_curl_method=" + nova_curl_method + " ]"
-            self.rc_util.syslogout(msg, syslog.LOG_ERR)
-            msg = "[ nova_variable_url=" + nova_variable_url + " ]"
-            self.rc_util.syslogout(msg, syslog.LOG_ERR)
-
+        except exceptions.ClientException as e:
+            error_code = "[RecoveryControllerUtilApi_0005]"
+            msg = 'Fails to call Nova Servers List API: %s' % e
+            self.rc_util.syslogout(error_code + msg, syslog.LOG_ERR)
             raise
-
-        return response_code, rbody
 
     def do_host_maintenance_mode(self, hostname, mode):
         """
