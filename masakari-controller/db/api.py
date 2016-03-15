@@ -26,20 +26,74 @@ from sqlalchemy_utils.functions import database_exists, create_database
 from sqlalchemy import asc
 from sqlalchemy.orm import scoped_session
 from sqlalchemy import distinct
+import sqlalchemy.exc as dbexc
+from contextlib import contextmanager
 import os
 import sys
-
+import traceback
+import syslog
+from functools import wraps
+import time
 parentdir = os.path.abspath(os.path.join(os.path.dirname(__file__),
                                          os.path.pardir))
 # rootdir = os.path.abspath(os.path.join(parentdir, os.path.pardir))
 # project root directory needs to be add at list head rather than tail
 # this file named 'masakari' conflicts to the directory name
 sys.path = [parentdir] + sys.path
-
+print sys.path
 import controller.masakari_config as config
+import controller.masakari_util as util
 
+rc_config = config.RecoveryControllerConfig()
+rc_util = util.RecoveryControllerUtil(rc_config)
 
 _SESSION = sessionmaker()
+
+
+@contextmanager
+def _sqlalchemy_error():
+    try:
+        yield
+    except dbexc.SQLAlchemyError, e:
+        print e
+        return
+
+
+def _session_handle(fn):
+    """Decorator to commit and safe rollback sessions if error"""
+
+    @wraps(fn)
+    def wrapped(session, *args, **kwargs):
+        session.begin(subtransactions=True)
+        try:
+            ret = fn(session, *args, **kwargs)
+            session.commit()
+            return ret
+        except:
+            session.rollback()
+            raise
+    return wrapped
+
+
+def _retry_on_deadlock(fn):
+    """Decorator to retry a DB API call if Deadlock was received."""
+    lock_messages_error = ['Deadlock found', 'Lock wait timeout exceeded']
+
+    @wraps(fn)
+    def wrapped(*args, **kwargs):
+        while True:
+            try:
+                return fn(*args, **kwargs)
+            except dbexc.OperationalError as e:
+                if any(msg in e.message for msg in lock_messages_error):
+                    msg = ("Deadlock detected when running %s Retrying..." %
+                           (fn.__name__))
+                    rc_util.syslogout(msg, syslog.LOG_WARNING)
+                    print msg
+                    # Retry!
+                    time.sleep(0.5)
+                    continue
+    return wrapped
 
 
 def get_engine():
@@ -295,12 +349,11 @@ def update_reserve_list_by_cluster_port_as_deleted(session, delete_at,
         update({'delete_at': delete_at, 'deleted': 1})
 
 
+@_session_handle
 def get_old_records_notification(session, border_time):
     # sql = "SELECT id FROM notification_list " \
     #       "WHERE progress = 0 AND create_at < '%s'" \
     #       % (border_time_str)
-    print ("type of create_at")
-    print type(NotificationList.create_at)
     cnt = session.query(NotificationList).filter(
         NotificationList.progress == 0,
         NotificationList.create_at < border_time).all()
@@ -324,7 +377,7 @@ def get_reprocessing_records_list_distinct(session):
     #         "WHERE progress = 0 AND recover_by = 1"
     cnt = session.query(
         NotificationList.notification_uuid,).filter_by(progress=0).filter_by(
-        recover_by=1).distinct()
+            recover_by=1).distinct().all()
     return cnt
 
 
@@ -338,7 +391,7 @@ def get_reprocessing_records_list(session, notification_uuid):
     cnt = session.query(NotificationList).filter_by(
         progress=0).filter_by(notification_uuid=notification_uuid).order_by(
             desc(NotificationList.create_at),
-            desc(NotificationList.id))
+            desc(NotificationList.id)).all()
     return cnt
 
 
@@ -352,7 +405,7 @@ def get_notification_list_by_hostname(session, notification_hostname):
     cnt = session.query(NotificationList).filter_by(progress=0).filter_by(
         notification_hostname=notification_hostname).order_by(
         desc(NotificationList.create_at),
-        desc(NotificationList.id))
+        desc(NotificationList.id)).all()
     return cnt
 
 
@@ -378,7 +431,7 @@ def get_notification_list_distinct_hostname(session):
     #         "WHERE progress = 0 AND recover_by = 0"
     cnt = session.query(NotificationList.notification_hostname,
                         ).filter_by(progress=0).filter_by(
-                            recover_by=0).distinct()
+                            recover_by=0).distinct().all()
     return cnt
 
 
