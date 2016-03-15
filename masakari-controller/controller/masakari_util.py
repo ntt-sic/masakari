@@ -690,49 +690,22 @@ class RecoveryControllerUtilApi(object):
             raise
 
     def do_instance_evacuate(self, uuid, targethost):
-        """
-        API-evacuate. Edit the body of the curl is performed
-        using the nova client.
-        :uuid : Instance id to be used in nova cliant curl.
+        """Call evacuate API for server instance.
+
+        :uuid : Instance id
         :targethost: The name or ID of the host where the server is evacuated.
-        :return :response_code :response code
-        :return :rbody :response body(json)
         """
         try:
-
-            # Set nova_curl_method
-            nova_curl_method = "POST"
-            # Set nova_variable_url
-            nova_variable_url = "/servers/" + uuid + "/action"
-            # Set nova_body
-            nova_body = "{\"evacuate\":{\"host\":\"" + \
-                targethost + "\",\"onSharedStorage\":\"True\"}}"
-
-            response_code, rbody = self._nova_curl_client(nova_curl_method,
-                                                          nova_variable_url,
-                                                          nova_body)
-
-        except:
-
-            self.rc_util.syslogout_ex("RecoveryControllerUtilApi_0007",
-                                      syslog.LOG_ERR)
-            error_type, error_value, traceback_ = sys.exc_info()
-            tb_list = traceback.format_tb(traceback_)
-            self.rc_util.syslogout(error_type, syslog.LOG_ERR)
-            self.rc_util.syslogout(error_value, syslog.LOG_ERR)
-            for tb in tb_list:
-                self.rc_util.syslogout(tb, syslog.LOG_ERR)
-
-            msg = "[ nova_curl_method=" + nova_curl_method + " ]"
-            self.rc_util.syslogout(msg, syslog.LOG_ERR)
-            msg = "[ nova_variable_url=" + nova_variable_url + " ]"
-            self.rc_util.syslogout(msg, syslog.LOG_ERR)
-            msg = "[ nova_body=" + nova_body + " ]"
-            self.rc_util.syslogout(msg, syslog.LOG_ERR)
-
+            self.rc_util.syslogout('Call Evacuate API with %s to %s' %
+                                   (uuid, targethost), syslog.LOG_INFO)
+            self.nova_client.servers.evacuate(uuid, host=targethost,
+                                              on_shared_storage=True)
+        except exceptions.ClientException as e:
+            error_code = "[RecoveryControllerUtilApi_0007]"
+            msg = ('Fails to call Instance Evacuate API onto %s: %s'
+                   % (targethost, e))
+            self.rc_util.syslogout(error_code + msg, syslog.LOG_ERR)
             raise
-
-        return response_code, rbody
 
     # TODO(sampath):
     # Use novaclient and omit this code

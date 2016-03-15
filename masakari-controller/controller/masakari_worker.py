@@ -213,15 +213,7 @@ class RecoveryControllerWorker(object):
             if vm_state == 'resized':
                 self.rc_util_api.do_instance_reset(uuid, 'error')
 
-            # Execute recovery(Call nova evacuate API).
-            rc, rbody = self.rc_util_api.do_instance_evacuate(
-                uuid, evacuate_node)
-
-            if rc != '200':
-                rbody = json.loads(rbody)
-                msg = '%s(code:%s)' % (rbody.get('error').get(
-                    'message'), rbody.get('error').get('code'))
-                raise EnvironmentError(msg)
+            self.rc_util_api.do_instance_evacuate(uuid, evacuate_node)
 
         except EnvironmentError:
             self.rc_util.syslogout_ex("RecoveryControllerWorker_0013",
