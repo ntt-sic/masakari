@@ -15,11 +15,11 @@ The section shows events that tigger Masakari to call which nova API.
 | Events | Monitored by | Previous instance's status | Rescue steps | Post instance's status |
 | :--- | :--- | :--- | :--- | :--- |
 | instance down | instancemonitor | active | nova.stop -> nova.start | active |
-| instance down | instancemonitor | stopped | nova.stop | stopped |
-| instance down | instancemonitor | resized | nova.reset -> nova.stop -> nova.start | active |
+| instance down | instancemonitor | stopped | nova.reset('stopped') | stopped |
+| instance down | instancemonitor | resized | nova.reset('error') -> nova.stop -> nova.start | active |
 | host down | hostmonitor | active | nova.evacuate | active |
 | host down | hostmonitor | stopped | nova.evacuate | stopped |
-| host down | hostmonitor | resized | nova.reset -> nova.evacuate | active |
+| host down | hostmonitor | resized | nova.reset('error') -> nova.evacuate | active |
 
 TBD: The table doesn't show all patterns for the evacuation now.
 Feel free to fill it out :-)
