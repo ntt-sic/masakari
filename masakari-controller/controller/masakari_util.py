@@ -674,60 +674,20 @@ class RecoveryControllerUtilApi(object):
             self.rc_util.syslogout(error_code + msg, syslog.LOG_ERR)
             raise
 
-    def do_host_maintenance_mode(self, hostname, mode):
-        """
-        API_host_maintenance_mode.
-        Edit the body of the curl is performed using the nova client.
+    def disable_host_status(self, hostname):
+        """Disable host' status.
+
         :hostname: Target host name
-        :mode: change to 'enable'/'disable'
-        :return :response_code :response code
-        :return :rbody :response body(json)
         """
-
-        nova_variable_url = ""
-        nova_body = ""
-
         try:
-
-            # Set nova_curl_method
-            nova_curl_method = "PUT"
-
-            # Set nova_variable_url
-            if mode == "enable" or mode == "disable":
-                nova_variable_url = "/os-services/" + mode
-            else:
-                e_msg = "mode is invalid.(mode=%s)" % (mode)
-                raise Exception(e_msg)
-
-            # Set nova_body
-            nova_body = "{\"host\":\"" + hostname + \
-                "\",\"binary\":\"nova-compute\"}"
-
-            response_code, rbody = self._nova_curl_client(nova_curl_method,
-                                                          nova_variable_url,
-                                                          nova_body)
-
-        except:
-
-            self.rc_util.syslogout_ex("RecoveryControllerUtilApi_0006",
-                                      syslog.LOG_ERR)
-            error_type, error_value, traceback_ = sys.exc_info()
-            tb_list = traceback.format_tb(traceback_)
-            self.rc_util.syslogout(error_type, syslog.LOG_ERR)
-            self.rc_util.syslogout(error_value, syslog.LOG_ERR)
-            for tb in tb_list:
-                self.rc_util.syslogout(tb, syslog.LOG_ERR)
-
-            msg = "[ nova_curl_method=" + nova_curl_method + " ]"
-            self.rc_util.syslogout(msg, syslog.LOG_ERR)
-            msg = "[ nova_variable_url=" + nova_variable_url + " ]"
-            self.rc_util.syslogout(msg, syslog.LOG_ERR)
-            msg = "[ nova_body=" + nova_body + " ]"
-            self.rc_util.syslogout(msg, syslog.LOG_ERR)
-
+            self.rc_util.syslogout('Disable nova-compute on %s' % hostname,
+                                   syslog.LOG_INFO)
+            self.nova_client.services.disable(hostname, 'nova-compute')
+        except exceptions.ClientException as e:
+            error_code = "[RecoveryControllerUtilApi_0006]"
+            msg = 'Fails to disable nova-compute on %s: %s' % (hostname, e)
+            self.rc_util.syslogout(error_code + msg, syslog.LOG_ERR)
             raise
-
-        return response_code, rbody
 
     def do_instance_evacuate(self, uuid, targethost):
         """

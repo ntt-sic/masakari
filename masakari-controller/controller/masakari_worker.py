@@ -426,14 +426,7 @@ class RecoveryControllerWorker(object):
         try:
             db_engine = dbapi.get_engine()
             session = dbapi.get_session(db_engine)
-            rc, rbody = self.rc_util_api.do_host_maintenance_mode(hostname,
-                                                                  'disable')
-            if rc != '200':
-                self.rc_util.syslogout_ex("RecoveryControllerWorker_0029",
-                                          syslog.LOG_ERR)
-                msg = "Failed to nova API. change to disable."
-                self.rc_util.syslogout(msg, syslog.LOG_ERR)
-                raise Exception(msg)
+            self.rc_util_api.disable_host_status(hostname)
 
             if update_progress is True:
                 self.rc_util_db.update_notification_list_db(
