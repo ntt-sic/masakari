@@ -823,6 +823,8 @@ class RecoveryControllerUtilApi(object):
         :status :Status that you specify for the API.
         :return :response_code :response code
         :return :rbody :response body(json)
+
+        todo(masa) replaces curl command with python-novaclient
         """
         try:
 
@@ -830,6 +832,7 @@ class RecoveryControllerUtilApi(object):
             nova_curl_method = "POST"
             # Set nova_variable_url
             nova_variable_url = "/servers/" + uuid + "/action"
+
             # Set nova_body
             nova_body = "{\"os-resetState\":{\"state\":\"" + status + "\"}}"
 
