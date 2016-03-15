@@ -121,18 +121,12 @@ class RecoveryController(object):
             self.rc_util.syslogout(
                 "masakari START.", syslog.LOG_INFO)
 
-            # conn = None
-            # cursor = None
-            # # Get database session
-            # conn, cursor = self.rc_util_db.connect_database()
-
             # Get a session and do not pass it to other threads
             db_engine = dbapi.get_engine()
             session = dbapi.get_session(db_engine)
 
             self._update_old_records_notification_list(session)
             result = self._find_reprocessing_records_notification_list(session)
-            # self.rc_util_db.disconnect_database(conn, cursor)
             preprocessing_count = len(result)
 
             if preprocessing_count > 0:
@@ -152,8 +146,9 @@ class RecoveryController(object):
                             "RecoveryController_0035", syslog.LOG_INFO)
                         dic = self.rc_config.get_value('recover_starter')
                         node_err_wait = dic.get("node_err_wait")
-                        msg = "Sleeping %s sec before starting node recovery thread, until updateing nova-compute service status." % (
-                            node_err_wait)
+                        msg = ("Sleeping %s sec before starting node recovery"
+                               "thread, until updateing nova-compute"
+                               "service status." % (node_err_wait))
                         self.rc_util.syslogout(msg, syslog.LOG_INFO)
                         greenthread.sleep(int(node_err_wait))
 
@@ -242,31 +237,12 @@ class RecoveryController(object):
 
         now = datetime.datetime.now()
         # Get border time
-        border_time = now - \
-            datetime.timedelta(seconds=notification_expiration_sec)
-        # border_time_str = border_time.strftime('%Y-%m-%d %H:%M:%S')
-
-        # Set old record progress = 4
-        # sql = "SELECT id FROM notification_list " \
-        #       "WHERE progress = 0 AND create_at < '%s'" \
-        #       % (border_time_str)
+        border_time = now - datetime.timedelta(
+            seconds=notification_expiration_sec)
         self.rc_util.syslogout_ex("RecoveryControllerl_0047", syslog.LOG_INFO)
-        # self.rc_util.syslogout("SQL=" + sql, syslog.LOG_INFO)
-        # # cnt = cursor.execute(sql)
-        # # result = cursor.fetchall()
         result = dbapi.get_old_records_notification(session, border_time)
 
         for row in result:
-            # sql = "UPDATE notification_list " \
-            #       "SET progress = %d, update_at = '%s', delete_at = '%s' " \
-            #       "WHERE id = '%s'" \
-            #       % (4, datetime.datetime.now(),
-            #          datetime.datetime.now(), row.get("id"))
-            # self.rc_util.syslogout_ex(
-            #     "RecoveryControllerl_0048", syslog.LOG_INFO)
-            # self.rc_util.syslogout("SQL=" + sql, syslog.LOG_INFO)
-            # cursor.execute(sql)
-            # conn.commit()
             dbapi.delet_expired_notification(
                 session, 4,
                 datetime.datetime.now(),
@@ -275,29 +251,12 @@ class RecoveryController(object):
 
     def _find_reprocessing_records_notification_list(self, session):
         return_value = []
-
-        # Get list of notification_uuid
-        # sql = "SELECT DISTINCT notification_uuid FROM notification_list " \
-        #     "WHERE progress = 0 AND recover_by = 1"
-        # self.rc_util.syslogout_ex("RecoveryControllerl_0049", syslog.LOG_INFO)
-        # self.rc_util.syslogout("SQL=" + sql, syslog.LOG_INFO)
-        # cnt = cursor.execute(sql)
-        # result = cursor.fetchall()
         result = dbapi.get_reprocessing_records_list_distinct(session)
 
         # Get reprocessing record
         for row in result:
-            # sql = "SELECT id, notification_id, notification_hostname, " \
-            #     "notification_uuid, notification_cluster_port, recover_by " \
-            #     "FROM notification_list " \
-            #       "WHERE progress = 0 AND notification_uuid = '%s' " \
-            #       "ORDER BY create_at DESC, id DESC" \
-            #       % (row.get("notification_uuid"))
             self.rc_util.syslogout_ex(
                 "RecoveryControllerl_0050", syslog.LOG_INFO)
-            # self.rc_util.syslogout("SQL=" + sql, syslog.LOG_INFO)
-            # cursor.execute(sql)
-            # result2 = cursor.fetchall()
             result2 = dbapi.get_reprocessing_records_list(
                 session, row.notification_uuid)
             # First row is reprocessing record.
@@ -306,67 +265,32 @@ class RecoveryController(object):
                 if row_cnt == 0:
                     return_value.append(row2)
                 else:
-                    # Update progress
-                    # sql = "UPDATE notification_list " \
-                    #     "SET progress = %d , update_at = '%s', " \
-                    #     "delete_at = '%s' " \
-                    #       "WHERE id = '%s'" \
-                    #     % (4, datetime.datetime.now(),
-                    #        datetime.datetime.now(), row2.get("id"))
                     ct = datetime.datetime.now()
                     dbapi.update_reprocessing_records(
                         session, 4, ct, ct, row2.id)
                     self.rc_util.syslogout_ex(
                         "RecoveryControllerl_0051", syslog.LOG_INFO)
-                    # self.rc_util.syslogout("SQL=" + sql, syslog.LOG_INFO)
-                    # cursor.execute(sql)
-                    # conn.commit()
                 row_cnt += 1
-
-        # sql = "SELECT DISTINCT notification_hostname FROM notification_list " \
-        #     + "WHERE progress = 0 AND recover_by = 0"
         self.rc_util.syslogout_ex("RecoveryControllerl_0052", syslog.LOG_INFO)
-        # self.rc_util.syslogout("SQL=" + sql, syslog.LOG_INFO)
-        # cnt = cursor.execute(sql)
-        # result = cursor.fetchall()
         result = dbapi.get_notification_list_distinct_hostname(session)
 
         # Get reprocessing record
         for row in result:
-            # sql = "SELECT id, notification_id, notification_hostname, " \
-            #       "notification_uuid, notification_cluster_port, recover_by " \
-            #       "FROM notification_list " \
-            #       "WHERE progress = 0 AND notification_hostname = '%s' " \
-            #       "ORDER BY create_at DESC, id DESC" \
-            #       % (row.get("notification_hostname"))
             self.rc_util.syslogout_ex(
                 "RecoveryControllerl_0053", syslog.LOG_INFO)
-            # self.rc_util.syslogout("SQL=" + sql, syslog.LOG_INFO)
-            # cursor.execute(sql)
             result2 = dbapi.get_notification_list_by_hostname(
                 session, row.notification_hostname)
-
             # First row is reprocessing record.
             row_cnt = 0
             for row2 in result2:
                 if row_cnt == 0:
                     return_value.append(row2)
                 else:
-                    # Update progress
-                    # sql = "UPDATE notification_list " \
-                    #       "SET progress = %d , update_at = '%s', " \
-                    #       "delete_at = '%s' " \
-                    #       "WHERE id = '%s'" \
-                    #     % (4, datetime.datetime.now(),
-                    #        datetime.datetime.now(), row2.get("id"))
                     ct = datetime.datetime.now()
                     dbapi.update_reprocessing_records(
                         session, 4, ct, ct, row2.id)
                     self.rc_util.syslogout_ex(
                         "RecoveryControllerl_0054", syslog.LOG_INFO)
-                    # self.rc_util.syslogout("SQL=" + sql, syslog.LOG_INFO)
-                    # cursor.execute(sql)
-                    # conn.commit()
                 row_cnt += 1
 
         return return_value
@@ -445,8 +369,10 @@ class RecoveryController(object):
                             "RecoveryController_0029", syslog.LOG_INFO)
                         dic = self.rc_config.get_value('recover_starter')
                         node_err_wait = dic.get("node_err_wait")
-                        msg = "Sleeping %s sec before starting recovery thread until nova recognizes the node down..." % (
-                            node_err_wait)
+                        msg = ("Sleeping %s sec before starting recovery"
+                               "thread until nova recognizes the node down..."
+                               % (node_err_wait)
+                               )
                         self.rc_util.syslogout(msg, syslog.LOG_INFO)
                         greenthread.sleep(int(node_err_wait))
 
@@ -544,15 +470,6 @@ class RecoveryController(object):
             # Get session for db
             db_engine = dbapi.get_engine()
             session = dbapi.get_session(db_engine)
-            # conn=None
-            # cursor=None
-            # Get database connection
-            # conn, cursor=self.rc_util_db.connect_database()
-            # Lock notification_list table
-
-            # table_name='notification_list'
-            # self.rc_util_db.run_lock_query(table_name, cursor)
-
             if self._check_retry_notification(jsonData, session):
                 self.rc_util.syslogout_ex(
                     "RecoveryController_0030", syslog.LOG_INFO)
@@ -672,13 +589,8 @@ class RecoveryController(object):
     def _check_retry_notification(self, jsonData, session):
 
         notification_id = jsonData.get("id")
-        # # Execute SQL
-        # sql = "SELECT notification_id FROM notification_list " \
-        #       "WHERE notification_id = '%s'" % (notification_id)
-        # cnt = cursor.execute(sql)
-
         cnt = dbapi.get_all_notification_list_by_notification_id(
-            sessaion, notification_id)
+            session, notification_id)
         # if cnt is 0, not duplicate notification.
         if not cnt:
             return 0
@@ -687,12 +599,7 @@ class RecoveryController(object):
 
     def _check_repeated_notify(self, notification_time,
                                notification_hostname, session):
-        # sql = "SELECT notification_time FROM notification_list " \
-        #     "WHERE notification_hostname = '%s'" \
-        #     "AND notification_type = 'rscGroup'" \
-        #     % (notification_hostname)
-        # cnt = cursor.execute(sql)
-        result = dbapi.get_all_notification_list_by_hostname_with_rscgroup_type(
+        result = dbapi.get_all_notification_list_by_hostname_type(
             session, notification_hostname)
         # if cnt is 0, not duplicate notification.
         if not result:

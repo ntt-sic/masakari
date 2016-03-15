@@ -21,11 +21,14 @@ from sqlalchemy import engine, create_engine, or_
 from sqlalchemy.orm import sessionmaker
 from sqlalchemy.sql.expression import desc
 from models import NotificationList, VmList, ReserveList
+from models import Base
+from sqlalchemy_utils.functions import database_exists, create_database
 from sqlalchemy import asc
 from sqlalchemy.orm import scoped_session
 from sqlalchemy import distinct
 import os
 import sys
+
 parentdir = os.path.abspath(os.path.join(os.path.dirname(__file__),
                                          os.path.pardir))
 # rootdir = os.path.abspath(os.path.join(parentdir, os.path.pardir))
@@ -89,6 +92,14 @@ def get_engine():
     return eng
 
 
+def create_tables():
+    eng = get_engine()
+    if not database_exists(eng.url):
+        create_database(eng.url)
+    # Create all tables in the engine
+    Base.metadata.create_all(eng)
+
+
 def get_session(engine):
     session_fac = sessionmaker(bind=engine)
     thread_local_session = scoped_session(session_fac)
@@ -106,7 +117,7 @@ def get_all_notification_list_by_notification_id(session, notification_id):
         filter_by(notification_id=notification_id).all()
 
 
-def get_all_notification_list_by_notification_id_for_update(
+def get_all_notification_list_by_id_for_update(
         session, notification_id):
     # SELECT recover_to FROM notification_list \
     #   WHERE notification_id=:notification_id for UPDATE
@@ -114,7 +125,7 @@ def get_all_notification_list_by_notification_id_for_update(
         filter_by(notification_id=notification_id).all()
 
 
-def get_all_notification_list_by_hostname_with_rscgroup_type(
+def get_all_notification_list_by_hostname_type(
         session, notification_hostname):
     # SELECT notification_time FROM notification_list \
     #   WHERE notification_hostname = :notification_hostname AND \
@@ -177,7 +188,7 @@ def update_notification_list_by_notification_id(session,
         filter_by(notification_id=notification_id).update({key: value})
 
 
-def update_notification_list_by_notification_id_set_recover_to(
+def update_notification_list_by_notification_id_recover_to(
         session, notification_id, update_at, recover_to):
     # UPDATE notification_list
     #   SET update_at=:update_at, recover_to=:recover_to

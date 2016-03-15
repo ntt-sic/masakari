@@ -127,14 +127,6 @@ class RecoveryControllerWorker(object):
     def _get_vmha_param(self, session, uuid, primary_id):
         # TODO(sampath): remove unused 'uuid' form args
         try:
-            # Get need recovery infomation.
-            # sql = "SELECT recover_by, recover_to " \
-            #       "FROM vm_list " \
-            #       "WHERE id = %s" \
-            #       % (primary_id)
-
-            # conf_db_dic = self.rc_config.get_value('db')
-            # recover_data = self._do_action_db(conf_db_dic, sql)
             recover_data = dbapi.get_vm_list_by_id(session, primary_id)
 
             if recover_data is None:

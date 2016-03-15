@@ -155,12 +155,13 @@ class RecoveryControllerUtilDb(object):
 
         # NOTE: The notification item 'endTime' may have a NULL value.
         #       reference : The Notification Spec for RecoveryController.
-
+        # JSON decoder perform null -> None translation
         try:
-            if jsonData.get("endTime"):
+            if not jsonData.get("endTime"):
                 j_endTime = None
             else:
-                j_endTime = jsonData.get("endTime")
+                j_endTime = datetime.datetime.strptime(
+                    jsonData.get("endTime"), '%Y%m%d%H%M%S')
             # update and deleted :not yet
             create_at = datetime.datetime.now()
             update_at = None
@@ -182,6 +183,10 @@ class RecoveryControllerUtilDb(object):
                 # If reserve node is None, set progress 3.
                 if recover_to is None:
                     progress = 3
+            notification_time = datetime.datetime.strptime(
+                jsonData.get("time"), '%Y%m%d%H%M%S')
+            notification_startTime = datetime.datetime.strptime(
+                jsonData.get("startTime"), '%Y%m%d%H%M%S')
         except Exception as e:
 
             self.rc_util.syslogout_ex("RecoveryControllerUtilDb_0005",
@@ -198,8 +203,10 @@ class RecoveryControllerUtilDb(object):
             raise e
         # Todo: (sampath) correct the exceptions catching
         # Insert to notification_list DB.
+
         try:
             result = dbapi.add_notification_list(
+                session,
                 create_at=create_at,
                 update_at=update_at,
                 delete_at=delete_at,
@@ -209,11 +216,11 @@ class RecoveryControllerUtilDb(object):
                 notification_regionID=jsonData.get("regionID"),
                 notification_hostname=jsonData.get("hostname"),
                 notification_uuid=jsonData.get("uuid"),
-                notification_time=jsonData.get("time"),
+                notification_time=notification_time,
                 notification_eventID=jsonData.get("eventID"),
                 notification_eventType=jsonData.get("eventType"),
                 notification_detail=jsonData.get("detail"),
-                notification_startTime=jsonData.get("startTime"),
+                notification_startTime=notification_startTime,
                 notification_endTime=j_endTime,
                 notification_tzname=jsonData.get("tzname"),
                 notification_daylight=jsonData.get("daylight"),
