@@ -1,0 +1,11 @@
+[Unit]
+Description=Masakari Instancemonitor
+
+[Service]
+Type=simple
+User=openstack
+Group=openstack
+ExecStart=/usr/bin/masakari-instancemonitor
+
+[Install]
+WantedBy=multi-user.target

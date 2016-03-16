@@ -1,0 +1,11 @@
+[Unit]
+Description=Masakari Hostmonitor
+
+[Service]
+Type=simple
+User=openstack
+Group=openstack
+ExecStart=bash /opt/masakari/hostmonitor/masakari-hostmonitor.sh
+
+[Install]
+WantedBy=multi-user.target

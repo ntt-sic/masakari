@@ -34,6 +34,7 @@ import syslog
 import threading
 import traceback
 from eventlet import greenthread
+import errno
 
 class RecoveryControllerUtilDb(object):
 
@@ -1463,6 +1464,17 @@ class RecoveryControllerUtil(object):
         f = "%(asctime)s " + host + \
             " masakari-controller(%(process)d): %(levelname)s: %(message)s'"
         formatter = logging.Formatter(fmt=f, datefmt='%b %d %H:%M:%S')
+        log_dir = '/var/log/masakari/'
+
+        # create log dir if not created
+        try:
+            os.makedirs(log_dir)
+        except OSError as exc:
+            if exc.errno == errno.EEXIST and os.path.isdir(log_dir):
+                pass
+            else:
+                raise
+
         fh = logging.FileHandler(
             filename='/var/log/masakari/masakari-controller.log')
 

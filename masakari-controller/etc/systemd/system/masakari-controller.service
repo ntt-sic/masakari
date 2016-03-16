@@ -1,0 +1,11 @@
+[Unit]
+Description=Masakari Controller
+
+[Service]
+Type=simple
+User=openstack
+Group=openstack
+ExecStart=/usr/bin/masakari-controller
+
+[Install]
+WantedBy=multi-user.target

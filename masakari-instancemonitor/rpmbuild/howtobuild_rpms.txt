@@ -1,0 +1,23 @@
+Building:
+Install the build tools,
+$sudo yum install rpm-build rpmdevtools
+
+sets up an RPM build area in your ~/rpmbuild directory. This directory will contain several subdirectories, for the project source code, RPM configuration files and for the resulting source and binary packages. 
+
+Assume that https://github.com/ntt-sic/masakari.git is cloned.
+
+First, create rpm build tree
+$rpmdev-setuptree
+if fails,
+$mkdir -p ~/rpmbuild/{BUILD,RPMS,SOURCES,SPECS,SRPMS}
+
+$cd masakari
+$tar czvf masakari-instancemonitor.tar.gz masakari-instancemonitor --exclude='masakari-instancemonitor/debian' --exclude='masakari-instancemonitor/rpmbuild'
+mv masakari-instancemonitor.tar.gz ~/rpmbuild/SOURCES/
+cp masakari-instancemonitor/rpmbuild/SPECS/processmonitor.spec ~/rpmbuild/SPECS/
+cd ~/rpmbuild/SPECS/
+rpmbuild --bb instancemonitor.spec
+
+rpms are in,
+cd ~/rpmbuild/RPMS/ARCH
+# Substitute "ARCH" for your architecture

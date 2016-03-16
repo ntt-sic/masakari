@@ -1,0 +1,11 @@
+[Unit]
+Description=Masakari Processmonitor
+
+[Service]
+Type=simple
+User=openstack
+Group=openstack
+ExecStart=bash /opt/masakari/hostmonitor/masakari-processmonitor.sh
+
+[Install]
+WantedBy=multi-user.target
