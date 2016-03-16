@@ -24,6 +24,10 @@ from controller.masakari_config import RecoveryControllerConfig
 from db.models import Base
 from db import api as dbapi
 
+
+# Todo(sampath): No need this file
+# call dbapi.create_tables() to create tables
+
 try:
     # retrieve configuration parameters
     config = RecoveryControllerConfig()
@@ -42,12 +46,8 @@ except Exception as e:
 print "host:", host, "db:", db, "user:", user, "passwd:", passwd, "charset:", charset
 
 try:
-    # URL looks like this, "mysql://scott:tiger@localhost/test?charset=utf8"
-    # url = 'mysql://' + user + ':' + passwd + '@' + \
-    #     host + '/' + db + '?' + 'charset=' + charset
     # Create an engine to store data in the database
     engine = dbapi.get_engine()
-    # engine = create_engine(url, echo=True)
     # Create database if not exists
     if not database_exists(engine.url):
         create_database(engine.url)

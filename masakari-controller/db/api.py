@@ -39,24 +39,26 @@ parentdir = os.path.abspath(os.path.join(os.path.dirname(__file__),
 # rootdir = os.path.abspath(os.path.join(parentdir, os.path.pardir))
 # project root directory needs to be add at list head rather than tail
 # this file named 'masakari' conflicts to the directory name
-sys.path = [parentdir] + sys.path
-print sys.path
-import controller.masakari_config as config
-import controller.masakari_util as util
+if parentdir not in sys.path:
+    sys.path = [parentdir] + sys.path
 
+import controller.masakari_config as config
+# Todo(samapth): Do not do this to import log handler
+# import controller.masakari_util.RecoveryControllerUtil as util
+# from controller import masari_config as config
+# from controller import masakari_util as util
 rc_config = config.RecoveryControllerConfig()
-rc_util = util.RecoveryControllerUtil(rc_config)
 
 _SESSION = sessionmaker()
 
 
 @contextmanager
 def _sqlalchemy_error():
+    # Todo(sampath): get the log handler and log out the error
     try:
         yield
     except dbexc.SQLAlchemyError, e:
-        print e
-        return
+        raise e
 
 
 def _session_handle(fn):
@@ -64,7 +66,7 @@ def _session_handle(fn):
 
     @wraps(fn)
     def wrapped(session, *args, **kwargs):
-        session.begin(subtransactions=True)
+        # session.begin(subtransactions=True)
         try:
             ret = fn(session, *args, **kwargs)
             session.commit()
@@ -86,10 +88,9 @@ def _retry_on_deadlock(fn):
                 return fn(*args, **kwargs)
             except dbexc.OperationalError as e:
                 if any(msg in e.message for msg in lock_messages_error):
-                    msg = ("Deadlock detected when running %s Retrying..." %
-                           (fn.__name__))
-                    rc_util.syslogout(msg, syslog.LOG_WARNING)
-                    print msg
+                    # msg = ("Deadlock detected when running %s Retrying..." %
+                    #        (fn.__name__))
+                    # rc_util.syslogout(msg, syslog.LOG_WARNING)
                     # Retry!
                     time.sleep(0.5)
                     continue
@@ -113,17 +114,13 @@ def get_engine():
      'sybase'
     sqlite is only for testing..
     """
-
-    # URL looks like this, "mysql://scott:tiger@localhost/test?charset=utf8"
-    # url = 'mysql://'\
-    #       + conf_db_dic.get("user") + ':' + conf_db_dic.get("passwd") +\
-    #       '@' + conf_db_dic.get("host") +\
-    #       '/' + conf_db_dic.get("name") +\
-    #       '?' + 'charset=' + conf_db_dic.get("charset")
-    drivername = conf_db_dic.get("drivername", "mysql")
-    print conf_db_dic.get("drivername")
-    print "drivername is %s" % (drivername)
+    # get the drivername of the db.
+    # default is sqlite
+    drivername = conf_db_dic.get("drivername", "sqlite")
     charset = conf_db_dic.get("charset")
+    # Todo(sampath): currently query string is only support for
+    #                mysql and postgresql.
+    #                need to extend the support for other dbs
     if drivername is "postgresql":
         query = {'client_encoding': charset}
     elif drivername is "mysql":
@@ -155,22 +152,31 @@ def create_tables():
 
 
 def get_session(engine):
-    session_fac = sessionmaker(bind=engine)
-    thread_local_session = scoped_session(session_fac)
+    with _sqlalchemy_error():
+        session_fac = sessionmaker(bind=engine)
+        thread_local_session = scoped_session(session_fac)
     return thread_local_session()
 
 
+@_session_handle
 def get_all_notification_list_not_in_progress(session):
     # SELECT * FROM notification_list WHERE progress = 0
-    return session.query(NotificationList).filter_by(progress=0).all()
+    with _sqlalchemy_error():
+        res = session.query(NotificationList).filter_by(progress=0).all()
+    return res
 
 
+@_session_handle
 def get_all_notification_list_by_notification_id(session, notification_id):
     # SELECT * FROM notification_list WHERE notification_id = :notification_id
-    return session.query(NotificationList).\
-        filter_by(notification_id=notification_id).all()
+    with _sqlalchemy_error():
+        res = session.query(NotificationList).filter_by(
+            notification_id=notification_id).all()
+    return res
 
 
+@_retry_on_deadlock
+@_session_handle
 def get_all_notification_list_by_id_for_update(
         session, notification_id):
     # SELECT recover_to FROM notification_list \
@@ -179,16 +185,21 @@ def get_all_notification_list_by_id_for_update(
         filter_by(notification_id=notification_id).all()
 
 
+@_session_handle
 def get_all_notification_list_by_hostname_type(
         session, notification_hostname):
     # SELECT notification_time FROM notification_list \
     #   WHERE notification_hostname = :notification_hostname AND \
     #   notification_type = 'rscGroup'"
-    return session.query(NotificationList).\
-        filter_by(notification_hostname=notification_hostname).\
-        filter_by(notification_type='rscGroup').all()
+    with _sqlalchemy_error():
+        res = session.query(NotificationList).\
+            filter_by(notification_hostname=notification_hostname).\
+            filter_by(notification_type='rscGroup').all()
+    return res
 
 
+@_retry_on_deadlock
+@_session_handle
 def add_notification_list(session, create_at, update_at,
                           delete_at, deleted,
                           notification_id, notification_type,
@@ -234,14 +245,19 @@ def add_notification_list(session, create_at, update_at,
     return notification_list
 
 
+@_retry_on_deadlock
+@_session_handle
 def update_notification_list_by_notification_id(session,
                                                 notification_id, key, value):
     # UPDATE notification_list SET :key = :value
     #   WHERE notification_id = :notification_id
-    return session.query(NotificationList).\
+    res = session.query(NotificationList).\
         filter_by(notification_id=notification_id).update({key: value})
+    return res
 
 
+@_retry_on_deadlock
+@_session_handle
 def update_notification_list_by_notification_id_recover_to(
         session, notification_id, update_at, recover_to):
     # UPDATE notification_list
@@ -252,101 +268,136 @@ def update_notification_list_by_notification_id_recover_to(
         update({'update_at': update_at, 'recover_to': recover_to})
 
 
+@_session_handle
 def get_one_vm_list_by_uuid_create_at_last(session, uuid):
     # SELECT progress, create_at, retry_cnt FROM vm_list \
     #   WHERE uuid = :uuid ORDER BY create_at DESC LIMIT 1
-    return session.query(VmList).filter_by(uuid=uuid).order_by(
-        desc(VmList.create_at)).first()
+    with _sqlalchemy_error():
+        res = session.query(VmList).filter_by(uuid=uuid).order_by(
+            desc(VmList.create_at)).first()
+    return res
 
 
+@_session_handle
 def get_one_vm_list_by_uuid_and_progress_create_at_last(session,
                                                         notification_uuid):
     # SELECT * FROM vm_list WHERE uuid = :notification_uuid \
     #   AND (progress = 0 OR progress = 1) \
     #   ORDER BY create_at DESC LIMIT 1
-    return session.query(VmList).filter_by(uuid=notification_uuid).filter(
-        or_(VmList.progress == 0, VmList.progress == 1)).order_by(
-            desc(VmList.create_at)).first()
+    with _sqlalchemy_error():
+        res = session.query(VmList).filter_by(uuid=notification_uuid).filter(
+            or_(VmList.progress == 0, VmList.progress == 1)).order_by(
+                desc(VmList.create_at)).first()
+    return res
 
 
+@_session_handle
 def get_vm_list_by_uuid_and_progress_sorted(session, notification_uuid):
     # sql = "SELECT id, uuid FROM vm_list " \
     #       "WHERE uuid = '%s' " \
     #       "AND (progress = 0 OR progress = 1) " \
     #       "ORDER BY recover_by ASC, create_at DESC" \
     #       % (row.get("uuid"))
-    return session.query(VmList).filter_by(
-        uuid=notification_uuid).filter(or_(
-            VmList.progress == 0, VmList.progress == 1)).order_by(
-                asc(VmList.recover_by), desc(VmList.create_at)
-    ).all()
+    with _sqlalchemy_error():
+        res = session.query(VmList).filter_by(
+            uuid=notification_uuid).filter(or_(
+                VmList.progress == 0, VmList.progress == 1)).order_by(
+                    asc(VmList.recover_by), desc(VmList.create_at)
+        ).all()
+    return res
 
 
+@_session_handle
 def get_vm_list_by_id(session, id):
     # sql = "SELECT recover_by, recover_to " \
     #               "FROM vm_list " \
     #               "WHERE id = %s" \
     #               % (primary_id)
-    return session.query(VmList.recover_by, VmList.recover_to).filter_by(
-        id=id).one()
+    with _sqlalchemy_error():
+        res = session.query(VmList.recover_by, VmList.recover_to).filter_by(
+            id=id).one()
+    return res
 
 
+@_session_handle
 def get_all_vm_list_by_progress(session):
     # SELECT uuid FROM vm_list WHERE progress = 0 or progress = 1
-    return session.query(VmList.uuid).filter(
-        or_(VmList.progress == 0, VmList.progress == 1)).distinct().all()
+    with _sqlalchemy_error():
+        res = session.query(VmList.uuid).filter(
+            or_(VmList.progress == 0, VmList.progress == 1)).distinct().all()
+    return res
 
 
+@_retry_on_deadlock
+@_session_handle
 def update_vm_list_by_id_dict(session, id, update_val):
     # UPDATE vm_list SET :key = :value WHERE id = :id
-    return session.query(VmList).filter_by(id=id).update(update_val)
+    with _sqlalchemy_error():
+        res = session.query(VmList).filter_by(id=id).update(update_val)
+    return res
 
 
+@_retry_on_deadlock
+@_session_handle
 def add_vm_list(session, create_at, deleted, uuid, progress, retry_cnt,
                 notification_id, recover_to, recover_by):
     # INSERT INTO vm_list ( create_at, deleted, uuid, progress, retry_cnt,
     #   notification_id, recover_to, recover_by ) VALUES ( ... )
-    vm_list = VmList(create_at=create_at, deleted=deleted, uuid=uuid,
-                     progress=progress, retry_cnt=retry_cnt,
-                     notification_id=notification_id, recover_to=recover_to,
-                     recover_by=recover_by)
+    with _sqlalchemy_error():
+        vm_list = VmList(create_at=create_at, deleted=deleted, uuid=uuid,
+                         progress=progress, retry_cnt=retry_cnt,
+                         notification_id=notification_id,
+                         recover_to=recover_to,
+                         recover_by=recover_by)
     session.add(vm_list)
     session.commit()
     return vm_list
 
 
+@_session_handle
 def get_all_reserve_list_by_hostname_not_deleted(session, hostname):
     # SELECT * FROM reserve_list WHERE deleted=0 AND hostname=:hostname
-    return session.query(ReserveList).filter_by(hostname=hostname).\
-        filter_by(deleted=0).all()
+    with _sqlalchemy_error():
+        res = session.query(ReserveList).filter_by(hostname=hostname).\
+            filter_by(deleted=0).all()
+    return res
 
 
+@_session_handle
 def get_one_reserve_list_by_cluster_port_for_update(session, cluster_port,
                                                     notification_hostname):
     # SELECT id,hostname FROM reserve_list
     #   WHERE deleted=0 and cluster_port=:cluster_port
     #   and hostname!=:notification_hostname
     #   ORDER by create_at asc limit 1 FOR UPDATE
-    return session.query(
-        ReserveList).with_for_update().filter_by(deleted=0).filter_by(
-        cluster_port=cluster_port).filter(
-            ReserveList.hostname != notification_hostname).order_by(
-                asc(ReserveList.create_at)).first()
+    with _sqlalchemy_error():
+        res = session.query(
+            ReserveList).with_for_update().filter_by(deleted=0).filter_by(
+                cluster_port=cluster_port).filter(
+                    ReserveList.hostname != notification_hostname).order_by(
+                        asc(ReserveList.create_at)).first()
+    return res
 
 
+@_retry_on_deadlock
+@_session_handle
 def update_reserve_list_by_hostname_as_deleted(session, hostname, delete_at):
     # UPDATE reserve_list SET deleted=1, delete_at=:delete_at
     #   WHERE hostname=:hostname
-    return session.query(ReserveList).filter_by(hostname=hostname).\
+    res = session.query(ReserveList).filter_by(hostname=hostname).\
         update({'delete_at': delete_at, 'deleted': 1})
+    return res
 
 
+@_retry_on_deadlock
+@_session_handle
 def update_reserve_list_by_cluster_port_as_deleted(session, delete_at,
                                                    cluster_port):
     # UPDATE reserve_list SET deleted=1, delete_at=:delete_at
     #   WHERE cluster_port=:cluster_port
-    return session.query(ReserveList).filter_by(cluster_port=cluster_port).\
+    res = session.query(ReserveList).filter_by(cluster_port=cluster_port).\
         update({'delete_at': delete_at, 'deleted': 1})
+    return res
 
 
 @_session_handle
@@ -354,33 +405,41 @@ def get_old_records_notification(session, border_time):
     # sql = "SELECT id FROM notification_list " \
     #       "WHERE progress = 0 AND create_at < '%s'" \
     #       % (border_time_str)
-    cnt = session.query(NotificationList).filter(
-        NotificationList.progress == 0,
-        NotificationList.create_at < border_time).all()
-    return cnt
+    with _sqlalchemy_error():
+        res = session.query(NotificationList).filter(
+            NotificationList.progress == 0,
+            NotificationList.create_at < border_time).all()
+    return res
 
 
+@_retry_on_deadlock
+@_session_handle
 def delet_expired_notification(session, progress, update_at, delete_at, id):
     # sql = "UPDATE notification_list " \
     #       "SET progress = %d, update_at = '%s', delete_at = '%s' " \
     #       "WHERE id = '%s'" \
     #       % (4, datetime.datetime.now(),
     #          datetime.datetime.now(), row.get("id"))
-    return session.query(NotificationList).filter_by(
+    res = session.query(NotificationList).filter_by(
         id=id).update(
             {'progress': 4, 'update_at': update_at, 'delete_at': delete_at}
     )
+    return res
 
 
+@_session_handle
 def get_reprocessing_records_list_distinct(session):
     # sql = "SELECT DISTINCT notification_uuid FROM notification_list " \
     #         "WHERE progress = 0 AND recover_by = 1"
-    cnt = session.query(
-        NotificationList.notification_uuid,).filter_by(progress=0).filter_by(
-            recover_by=1).distinct().all()
-    return cnt
+    with _sqlalchemy_error():
+        res = session.query(
+            NotificationList.notification_uuid,).filter_by(
+                progress=0).filter_by(
+                recover_by=1).distinct().all()
+    return res
 
 
+@_session_handle
 def get_reprocessing_records_list(session, notification_uuid):
     # sql = "SELECT id, notification_id, notification_hostname, "
     # "notification_uuid, notification_cluster_port, recover_by "
@@ -388,13 +447,15 @@ def get_reprocessing_records_list(session, notification_uuid):
     # "WHERE progress = 0 AND notification_uuid = '%s' "
     # "ORDER BY create_at DESC, id DESC"
     # % (row.get("notification_uuid"))
-    cnt = session.query(NotificationList).filter_by(
-        progress=0).filter_by(notification_uuid=notification_uuid).order_by(
-            desc(NotificationList.create_at),
-            desc(NotificationList.id)).all()
-    return cnt
+    with _sqlalchemy_error():
+        res = session.query(NotificationList).filter_by(
+            progress=0).filter_by(notification_uuid=notification_uuid).order_by(
+                desc(NotificationList.create_at),
+                desc(NotificationList.id)).all()
+    return res
 
 
+@_session_handle
 def get_notification_list_by_hostname(session, notification_hostname):
     # sql = "SELECT id, notification_id, notification_hostname, "
     # "notification_uuid, notification_cluster_port, recover_by "
@@ -402,13 +463,16 @@ def get_notification_list_by_hostname(session, notification_hostname):
     # "WHERE progress = 0 AND notification_hostname = '%s' "
     # "ORDER BY create_at DESC, id DESC"
     # % ("notification_hostname")
-    cnt = session.query(NotificationList).filter_by(progress=0).filter_by(
-        notification_hostname=notification_hostname).order_by(
-        desc(NotificationList.create_at),
-        desc(NotificationList.id)).all()
-    return cnt
+    with _sqlalchemy_error():
+        res = session.query(NotificationList).filter_by(progress=0).filter_by(
+            notification_hostname=notification_hostname).order_by(
+                desc(NotificationList.create_at),
+                desc(NotificationList.id)).all()
+    return res
 
 
+@_retry_on_deadlock
+@_session_handle
 def update_reprocessing_records(
         session, progress, update_at, delete_at, id):
     # sql = "UPDATE notification_list "
@@ -416,38 +480,45 @@ def update_reprocessing_records(
     # "delete_at = '%s' "
     # "WHERE id = '%s'"
     # % (4, datetime.datetime.now(),datetime.datetime.now(), row2.get("id"))
-    cnt = session.query(NotificationList).filter_by(id=id).update(
+    res = session.query(NotificationList).filter_by(id=id).update(
         {
             'progress': progress,
             'update_at': update_at,
             'delete_at': delete_at
         }
     )
-    return cnt
+    return res
 
 
+@_session_handle
 def get_notification_list_distinct_hostname(session):
     # sql = "SELECT DISTINCT notification_hostname FROM notification_list " \
     #         "WHERE progress = 0 AND recover_by = 0"
-    cnt = session.query(NotificationList.notification_hostname,
-                        ).filter_by(progress=0).filter_by(
-                            recover_by=0).distinct().all()
-    return cnt
+    with _sqlalchemy_error():
+        res = session.query(NotificationList.notification_hostname,
+                            ).filter_by(progress=0).filter_by(
+                                recover_by=0).distinct().all()
+    return res
 
 
+@_retry_on_deadlock
+@_session_handle
 def update_notification_list_dict(session, notification_id, update_val):
-    cnt = session.query(NotificationList).filter_by(
-        notification_id=notification_id).update(update_val)
-    return cnt
+    with _sqlalchemy_error():
+        res = session.query(NotificationList).filter_by(
+            notification_id=notification_id).update(update_val)
+    return res
 
 
+@_session_handle
 def get_old_records_vm_list(session, create_at, update_at):
     # sql = "SELECT id FROM vm_list " \
     #       "WHERE (progress = 0 AND create_at < '%s') " \
     #       "OR (progress = 1 AND update_at < '%s')" \
     #       % (border_time_str, border_time_str)
-    cnt = session.query(VmList).filter(
-        VmList.progress == 0,
-        VmList.create_at < create_at,
-        VmList.update_at < update_at).all()
-    return cnt
+    with _sqlalchemy_error():
+        res = session.query(VmList).filter(
+            VmList.progress == 0,
+            VmList.create_at < create_at,
+            VmList.update_at < update_at).all()
+    return res

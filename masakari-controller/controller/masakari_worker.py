@@ -38,7 +38,9 @@ parentdir = os.path.abspath(os.path.join(os.path.dirname(__file__),
 # rootdir = os.path.abspath(os.path.join(parentdir, os.path.pardir))
 # project root directory needs to be add at list head rather than tail
 # this file named 'masakari' conflicts to the directory name
-sys.path = [parentdir] + sys.path
+if parentdir not in sys.path:
+    sys.path = [parentdir] + sys.path
+
 import db.api as dbapi
 
 
