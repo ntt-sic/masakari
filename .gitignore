@@ -1,7 +1,7 @@
+*.py[cod]
 *.DS_Store
 *.log
 *.mo
-*.pyc
 !.gitignore
 !.testr.conf
 .*.sw?
