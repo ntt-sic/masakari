@@ -425,7 +425,7 @@ class RecoveryControllerWorker(object):
                     "while it is in vm_state active")
 
                 def msg_filter(return_message, ignore_message_list):
-                    # TODO(sampath):
+                    #TODO(sampath):
                     # Make this simple and opnestak version independet
                     # This patch is to absorb the message diff in juno and kilo
                     # juno message
