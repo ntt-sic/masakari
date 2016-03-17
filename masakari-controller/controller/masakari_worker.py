@@ -382,33 +382,6 @@ class RecoveryControllerWorker(object):
                 msg = '%s(code:%s)' % (rbody.get('error').get(
                     'message'), rbody.get('error').get('code'))
                 raise EnvironmentError(msg)
-            elif rc == '409':
-                rbody = json.loads(rbody)
-                return_message = rbody.get('conflictingRequest').get(
-                    'message')
-
-                ignore_message_list = []
-                ignore_message_list.append(
-                    "in vm_state stopped. "
-                    "Cannot stop while the instance "
-                    "is in this state.")
-                # kilo message
-                ignore_message_list.append(
-                    "while it is in vm_state stopped")
-
-                def msg_filter(return_message, ignore_message_list):
-                    # TODO(sampath):
-                    # Make this simple and opnestak version independet
-                    # This patch is to absorb the message diff in juno and kilo
-                    # juno message
-                    for ignore_message in ignore_message_list:
-                        if ignore_message in return_message:
-                            return True
-                    return False
-
-                if not msg_filter(return_message, ignore_message_list):
-                    msg = '%s(code:%s)' % (return_message, rc)
-                    raise EnvironmentError(msg)
 
             # Wait to be in the Stopped.
             conf_dic = self.rc_config.get_value('recover_starter')
@@ -452,8 +425,10 @@ class RecoveryControllerWorker(object):
                     "while it is in vm_state active")
 
                 def msg_filter(return_message, ignore_message_list):
-                    # TODO(sampath)
-                    # see the previous comment for def msg_filter
+                    # TODO(sampath):
+                    # Make this simple and opnestak version independet
+                    # This patch is to absorb the message diff in juno and kilo
+                    # juno message
                     for ignore_message in ignore_message_list:
                         if ignore_message in return_message:
                             return True
@@ -629,55 +604,6 @@ class RecoveryControllerWorker(object):
                 db.close()
 
         return result
-
-    def _select_old_vm_state(self, uuid):
-        conf_db_dic = self.rc_config.get_value('db')
-        # Set target database.
-        local_conf_dic = {}
-        local_conf_dic['passwd'] = conf_db_dic['passwd']
-        local_conf_dic['host'] = conf_db_dic['host']
-        local_conf_dic['charset'] = conf_db_dic['charset']
-        local_conf_dic['name'] = 'nova'
-        local_conf_dic['user'] = conf_db_dic['user']
-
-        sql = "SELECT value FROM instance_system_metadata " \
-              "WHERE instance_uuid='%s' AND `key`='old_vm_state' " \
-              "order by created_at desc limit 1" % (uuid)
-
-        # Do sql.
-        sql_result = self._do_action_db(local_conf_dic, sql)
-
-        # Return old_vm_state.
-        if sql_result:
-            return sql_result.get('value')
-        else:
-            return None
-
-    def _update_vm_state(self, uuid, vm_state):
-        conf_db_dic = self.rc_config.get_value('db')
-        # Set target database.
-        local_conf_dic = {}
-        local_conf_dic['passwd'] = conf_db_dic['passwd']
-        local_conf_dic['host'] = conf_db_dic['host']
-        local_conf_dic['charset'] = conf_db_dic['charset']
-        local_conf_dic['name'] = 'nova'
-        local_conf_dic['user'] = conf_db_dic['user']
-
-        # Update instances table.
-        # removed the task_state update to task_state=NULL from here
-        updated_at = datetime.datetime.now()
-        sql = "UPDATE instances SET vm_state='%s' , " \
-              "updated_at='%s' " \
-              "WHERE uuid='%s'" % (vm_state, updated_at, uuid)
-
-        self.rc_util.syslogout_ex("RecoveryControllerWorker_0028",
-                                  syslog.LOG_INFO)
-        msg = "Updated vm_state column of instances table. "\
-              "Query is \"%s\"" % sql
-        self.rc_util.syslogout(msg, syslog.LOG_INFO)
-
-        # Do sql.
-        self._do_action_db(local_conf_dic, sql)
 
     def host_maintenance_mode(self, notification_id, hostname,
                               update_progress):
