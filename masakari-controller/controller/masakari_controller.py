@@ -244,8 +244,8 @@ class RecoveryController(object):
         result = dbapi.get_old_records_notification(session, border_time)
 
         for row in result:
-            dbapi.delet_expired_notification(
-                session, 4,
+            dbapi.delete_expired_notification(
+                session,
                 datetime.datetime.now(),
                 datetime.datetime.now(),
                 row.id)

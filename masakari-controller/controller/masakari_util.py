@@ -348,8 +348,6 @@ class RecoveryControllerUtilDb(object):
         :param :notification_id: Notification ID
                 (updated narrowing condition of notification list table)
         """
-        # TODO:
-        # Get the cursor from Func Args and remove this MySQLdb.connect
         try:
             # Update progress with update_at and delete_at
             now = datetime.datetime.now()

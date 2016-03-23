@@ -27,10 +27,7 @@ import sys
 import json
 import datetime
 from eventlet import greenthread
-# TODO(sampath):
-# Delete this import if unused
-# conficlt with _do_action_db(self, config, sql):
-#import masakari_config as config
+# import masakari_config as config
 import masakari_util as util
 import os
 parentdir = os.path.abspath(os.path.join(os.path.dirname(__file__),
@@ -538,72 +535,6 @@ class RecoveryControllerWorker(object):
                 self.rc_util.syslogout(tb, syslog.LOG_ERR)
 
         return status
-
-    def _do_action_db(self, config, sql):
-        # TODO(sampath)
-        # Remove this method and use sqlalchemy
-        result = None
-        db = None
-        cursor = None
-
-        try:
-            # Connect db
-            db = MySQLdb.connect(host=config.get('host'),
-                                 db=config.get('name'),
-                                 user=config.get('user'),
-                                 passwd=config.get('passwd'),
-                                 charset=config.get('charset'))
-
-            cursor = db.cursor(MySQLdb.cursors.DictCursor)
-
-            # Excecute SQL
-            cursor.execute(sql)
-
-        except MySQLdb.Error:
-            self.rc_util.syslogout_ex("RecoveryControllerWorker_0025",
-                                      syslog.LOG_ERR)
-            error_type, error_value, traceback_ = sys.exc_info()
-            tb_list = traceback.format_tb(traceback_)
-            self.rc_util.syslogout(error_type, syslog.LOG_ERR)
-            self.rc_util.syslogout(error_value, syslog.LOG_ERR)
-            for tb in tb_list:
-                self.rc_util.syslogout(tb, syslog.LOG_ERR)
-            raise MySQLdb.Error
-        except KeyError:
-            self.rc_util.syslogout_ex("RecoveryControllerWorker_0026",
-                                      syslog.LOG_ERR)
-            error_type, error_value, traceback_ = sys.exc_info()
-            tb_list = traceback.format_tb(traceback_)
-            self.rc_util.syslogout(error_type, syslog.LOG_ERR)
-            self.rc_util.syslogout(error_value, syslog.LOG_ERR)
-            for tb in tb_list:
-                self.rc_util.syslogout(tb, syslog.LOG_ERR)
-            raise KeyError
-        except:
-            self.rc_util.syslogout_ex("RecoveryControllerWorker_0027",
-                                      syslog.LOG_ERR)
-            error_type, error_value, traceback_ = sys.exc_info()
-            tb_list = traceback.format_tb(traceback_)
-            self.rc_util.syslogout(error_type, syslog.LOG_ERR)
-            self.rc_util.syslogout(error_value, syslog.LOG_ERR)
-            for tb in tb_list:
-                self.rc_util.syslogout(tb, syslog.LOG_ERR)
-            raise
-
-        finally:
-            if sql.find('SELECT') == 0:
-                if cursor:
-                    result = cursor.fetchone()
-            else:
-                if db:
-                    db.commit()
-
-            if cursor:
-                cursor.close()
-            if db:
-                db.close()
-
-        return result
 
     def host_maintenance_mode(self, notification_id, hostname,
                               update_progress):

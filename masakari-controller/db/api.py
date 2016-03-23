@@ -414,7 +414,7 @@ def get_old_records_notification(session, border_time):
 
 @_retry_on_deadlock
 @_session_handle
-def delet_expired_notification(session, progress, update_at, delete_at, id):
+def delete_expired_notification(session, update_at, delete_at, id):
     # sql = "UPDATE notification_list " \
     #       "SET progress = %d, update_at = '%s', delete_at = '%s' " \
     #       "WHERE id = '%s'" \
