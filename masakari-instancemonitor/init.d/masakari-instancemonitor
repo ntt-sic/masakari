@@ -21,7 +21,7 @@
 
 PROGNAME=masakari-instancemonitor
 PROG_DIR=/opt/masakari/instancemonitor
-PROG=$PROG_DIR/masakari-instancemonitor.py
+PROG=$PROG_DIR/masakari_instancemonitor.py
 PIDFILE=/var/run/masakari-instancemonitor.pid
 PYTHON=/usr/bin/python
 USER=openstack
