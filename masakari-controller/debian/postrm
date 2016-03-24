@@ -6,8 +6,8 @@ dpkg-statoverride --remove /opt/masakari/controller/masakari_config.py
 dpkg-statoverride --remove /opt/masakari/controller/masakari_starter.py
 dpkg-statoverride --remove /opt/masakari/controller/masakari_util.py
 dpkg-statoverride --remove /opt/masakari/controller/masakari_worker.py
-dpkg-statoverride --remove --add openstack openstack 0644 /opt/masakari/controller/__init__.py
-dpkg-statoverride --remove --add openstack openstack 0644 /opt/masakari/db/api.py
-dpkg-statoverride --remove --add openstack openstack 0644 /opt/masakari/db/models.py
-dpkg-statoverride --remove --add openstack openstack 0644 /opt/masakari/db/__init__.py
+dpkg-statoverride --remove /opt/masakari/controller/__init__.py
+dpkg-statoverride --remove /opt/masakari/db/api.py
+dpkg-statoverride --remove /opt/masakari/db/models.py
+dpkg-statoverride --remove /opt/masakari/db/__init__.py
 exit 0
