@@ -185,10 +185,21 @@ class RecoveryControllerUtilDb(object):
                 # If reserve node is None, set progress 3.
                 if recover_to is None:
                     progress = 3
-            notification_time = datetime.datetime.strptime(
-                jsonData.get("time"), '%Y%m%d%H%M%S')
-            notification_startTime = datetime.datetime.strptime(
-                jsonData.get("startTime"), '%Y%m%d%H%M%S')
+
+            def strp_time(u_time):
+                """
+                Convert unicode time with format '%Y%m%d%H%M%S' to
+                datetime format.
+                """
+                try:
+                    d = datetime.datetime.strptime(u_time, '%Y%m%d%H%M%S')
+                except (ValueError, TypeError) as e:
+                    self.rc_util.syslogout(e, syslog.LOG_WARNING)
+                    d = None
+                return d
+
+            notification_time = strp_time(jsonData.get("time"))
+            notification_startTime = strp_time(jsonData.get("startTime"))
         except Exception as e:
 
             self.rc_util.syslogout_ex("RecoveryControllerUtilDb_0005",

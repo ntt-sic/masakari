@@ -160,6 +160,7 @@ class RecoveryControllerStarter(object):
                 "interval_to_be_retry")
             max_retry_cnt = conf_recover_starter_dic.get("max_retry_cnt")
             row_cnt = dbapi.get_one_vm_list_by_uuid_and_progress_create_at_last(
+                session,
                 notification_uuid)
 
             primary_id = None
