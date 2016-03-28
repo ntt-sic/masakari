@@ -78,8 +78,10 @@ class RecoveryControllerUtilDb(object):
                 session,
                 notification_id
             )
-            notification_recover_to = res.pop().recover_to
-            notification_recover_by = res.pop().recover_by
+            # Todo(sampath): select first and only object from the list
+            # log if many records
+            notification_recover_to = res[0].recover_to
+            notification_recover_by = res[0].recover_by
             vm_item = dbapi.add_vm_list(session,
                                         datetime.datetime.now(),
                                         "0",

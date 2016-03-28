@@ -210,7 +210,7 @@ class RecoveryControllerStarter(object):
                 session, notification_id, notification_uuid)
             # update record in notification_list
             self.rc_util_db.update_notification_list_db(
-                'progress', 2, notification_id)
+                session, 'progress', 2, notification_id)
             # create semaphore (Multiplicity = 1)
             sem_recovery_instance = threading.Semaphore(1)
             # create and start thread
@@ -534,8 +534,8 @@ class RecoveryControllerStarter(object):
             if len(result) > 0:
                 # Execute the required number
                 for row in result:
-                    vm_uuid = row.get("uuid")
-                    primary_id = row.get("id")
+                    vm_uuid = row.uuid
+                    primary_id = row.id
                     self.rc_util.syslogout_ex("RecoveryControllerStarter_0032",
                                               syslog.LOG_INFO)
                     msg = "Run thread rc_worker.recovery_instance." \
