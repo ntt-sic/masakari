@@ -33,7 +33,8 @@ from libvirt_eventfilter_table import *
 ###################################################
 # Global variable declaration
 ###################################################
-# Hold whether there is debug mode specified by option at the time of program startup.
+# Hold whether there is debug mode specified by option at the time of
+# program startup.
 do_debug = False
 
 #################################
@@ -42,7 +43,8 @@ do_debug = False
 #
 # Function overview:
 #   Output to the syslog(LOG_DEBUG level)
-#   Only if debug mode is specified by the startup option, output to the syslog.
+#   Only if debug mode is specified by the startup option,
+#   output to the syslog.
 #
 # Argument:
 #   msg : Message string
@@ -51,6 +53,8 @@ do_debug = False
 #   None
 #
 #################################
+
+
 def debug_log(msg):
     if do_debug:
         syslogout(msg)
@@ -69,6 +73,8 @@ def debug_log(msg):
 #   None
 #
 #################################
+
+
 def error_log(msg):
     syslogout(msg, logLevel=syslog.LOG_ERR)
 
@@ -86,6 +92,8 @@ def error_log(msg):
 #   None
 #
 #################################
+
+
 def warn_log(msg):
     syslogout(msg, logLevel=syslog.LOG_WARNING)
 
@@ -107,40 +115,44 @@ def warn_log(msg):
 #################################
 import logging
 
+
 def syslogout(msg, logLevel=syslog.LOG_DEBUG, logFacility=syslog.LOG_USER):
 
     # Output to the syslog.
-    arg0=os.path.basename(sys.argv[0])
-    host=socket.gethostname()
+    arg0 = os.path.basename(sys.argv[0])
+    host = socket.gethostname()
 
     logger = logging.getLogger()
-    logger.setLevel( logging.DEBUG )
+    logger.setLevel(logging.DEBUG)
 
-    f = "%(asctime)s " + host + " %(module)s(%(process)d): %(levelname)s: %(message)s"
+    f = "%(asctime)s " + host + \
+        " %(module)s(%(process)d): %(levelname)s: %(message)s"
 
-    formatter = logging.Formatter( fmt=f, datefmt='%b %d %H:%M:%S' )
+    formatter = logging.Formatter(fmt=f, datefmt='%b %d %H:%M:%S')
 
-    fh = logging.FileHandler( filename =
-            '/var/log/masakari/masakari-instancemonitor.log' )
-    fh.setLevel( logging.DEBUG )
-    fh.setFormatter( formatter )
+    fh = logging.FileHandler(
+        filename='/var/log/masakari/masakari-instancemonitor.log')
+    fh.setLevel(logging.DEBUG)
+    fh.setFormatter(formatter)
 
-    logger.addHandler( fh )
+    logger.addHandler(fh)
 
     if logLevel == syslog.LOG_DEBUG:
-        logger.debug( msg )
+        logger.debug(msg)
     elif logLevel == syslog.LOG_INFO or logLevel == syslog.LOG_NOTICE:
-        logger.info( msg )
+        logger.info(msg)
     elif logLevel == syslog.LOG_WARNING:
-        logger.warn( msg )
+        logger.warn(msg)
     elif logLevel == syslog.LOG_ERR:
-        logger.error( msg )
-    elif logLevel == syslog.LOG_CRIT or logLevel == syslog.LOG_ALERT or logLevel == syslog.LOG_EMERGE:
-        logger.critical( msg )
+        logger.error(msg)
+    elif logLevel == syslog.LOG_CRIT or \
+            logLevel == syslog.LOG_ALERT or \
+            logLevel == syslog.LOG_EMERGE:
+        logger.critical(msg)
     else:
-        logger.debug( msg )
+        logger.debug(msg)
 
-    logger.removeHandler( fh )
+    logger.removeHandler(fh)
 
 #################################
 # Function name:
@@ -159,6 +171,8 @@ def syslogout(msg, logLevel=syslog.LOG_DEBUG, logFacility=syslog.LOG_USER):
 #   None
 #
 #################################
+
+
 def virEventFilter(eventID, eventType, detail, uuID):
 
     noticeID = str(uuid.uuid4())
@@ -176,15 +190,24 @@ def virEventFilter(eventID, eventType, detail, uuID):
     time_daylight_str = str(time_daylight)
 
     # All Event Output if debug mode is on.
-    debug_log("libvirt Event Received. id=%s type=%s regionID=%s hostname=%s uuid=%s time=%s eventID=%d eventType=%d detail=%d tzname=%s daylight=%s" % (noticeID, noticeType, '<Not set yet>', hostname, uuID, currentTime, eventID, eventType, detail, tz_name_str, time_daylight_str))
+    debug_log("libvirt Event Received.id = %s type = %s regionID = %s"
+              "hostname = %s uuid = %s time = %s eventID = %d eventType = %d"
+              "detail = %d tzname = %s daylight = %s" % (
+                  noticeID, noticeType, '<Not set yet>',
+                  hostname, uuID, currentTime, eventID,
+                  eventType, detail, tz_name_str, time_daylight_str))
 
     try:
         if detail in event_filter_dic[eventID][eventType]:
             debug_log("Event Filter Matched.")
             # callback Thread Start
-            thread=threading.Thread(target=libvirtEventCallback, args=(eventID,
-                eventType, detail, uuID, noticeID, noticeType, hostname, currentTime,
-                tz_name_str, time_daylight_str))
+            thread = threading.Thread(
+                target=libvirtEventCallback,
+                args=(eventID, eventType, detail,
+                      uuID, noticeID, noticeType,
+                      hostname, currentTime,
+                      tz_name_str, time_daylight_str)
+            )
             thread.start()
         else:
             debug_log("Event Filter Unmatched.")
@@ -199,8 +222,7 @@ def virEventFilter(eventID, eventType, detail, uuID):
     except TypeError:
         debug_log("virEventFilter TypeError")
         pass
-    except :
+    except:
         debug_log("Unexpected error")
         sys.exc_info()[0]
         raise
-
