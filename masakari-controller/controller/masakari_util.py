@@ -562,9 +562,10 @@ class RecoveryControllerUtilApi(object):
         projects = filter(lambda x: (x.name == project_name),
                          ks_client.projects.list())
 
-        msg = ("Project name: %s doesn't exist in project list."
-               % self.rc_config.conf_nova['project_name'])
-        assert len(projects) == 1, msg
+        if len(projects) != 1:
+            msg = ("Project name: %s doesn't exist in project list."
+                   % self.rc_config.conf_nova['project_name'])
+            raise KeyError(msg)
 
         return projects[0].id
 
