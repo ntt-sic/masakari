@@ -1,3 +1,4 @@
 controller opt/masakari
+db opt/masakari
 init.d/masakari-controller etc/init.d
 etc/masakari-controller.conf.sample etc/masakari
