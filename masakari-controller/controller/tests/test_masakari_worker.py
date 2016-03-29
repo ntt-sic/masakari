@@ -26,8 +26,10 @@ import mock
 # test tool with virtualenv, throw away it.
 sys.path.append((os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
 
-import masakari_worker
+import fakes as nova_fakes
 import masakari_config
+import masakari_util
+import masakari_worker
 
 class TestRecoveryControllerWorker(unittest.TestCase):
     def setUp(self):
@@ -35,105 +37,85 @@ class TestRecoveryControllerWorker(unittest.TestCase):
         sample_config = os.path.dirname(os.path.abspath(__file__)) +\
             '/masakari-controller-test.conf'
         rc_config = masakari_config.RecoveryControllerConfig(sample_config)
-        self.worker = masakari_worker.RecoveryControllerWorker(rc_config)
+        with mock.patch('masakari_util.RecoveryControllerUtilApi') as mock_api:
+            self.worker = masakari_worker.RecoveryControllerWorker(rc_config)
         
     def tearDown(self):
         pass
 
     def test_do_node_accident_vm_recovery_with_resized(self):
-        self.worker.rc_util_api.do_instance_reset = mock.Mock()
-        self.worker.rc_util_api.do_instance_reset.return_value = ('202',
-                                                                  'success')
-        self.worker.rc_util_api.do_instance_evacuate = mock.Mock()
-        self.worker.rc_util_api.do_instance_evacuate.return_value = ('200',
-                                                                     'success')
+        self.worker.rc_util_api.do_instance_reset.return_value = None
+        self.worker.rc_util_api.do_instance_evacuate.return_value = None
+
         expected_ret = self.worker.STATUS_NORMAL
 
         ret = self.worker._do_node_accident_vm_recovery(
             'uuid1', 'resized', 'node1')
 
         self.assertEqual(expected_ret, ret)
+        (self.worker.rc_util_api.do_instance_reset.
+         assert_called_with('uuid1', 'error'))
 
     def test_do_node_accident_vm_recovery_with_active_stopped(self):
-        self.worker.rc_util_api.do_instance_evacuate = mock.Mock()
-        self.worker.rc_util_api.do_instance_evacuate.return_value = ('200',
-                                                                     'success')
+        self.worker.rc_util_api.do_instance_evacuate.return_value = None
         expected_ret = self.worker.STATUS_NORMAL
 
         ret = self.worker._do_node_accident_vm_recovery(
             'uuid1', 'active', 'node1')
         self.assertEqual(expected_ret, ret)
+        (self.worker.rc_util_api.do_instance_evacuate.
+         assert_called_with('uuid1', 'node1'))
 
         ret = self.worker._do_node_accident_vm_recovery(
-            'uuid1', 'stopped', 'node1')
+            'uuid2', 'stopped', 'node1')
         self.assertEqual(expected_ret, ret)
+        (self.worker.rc_util_api.do_instance_evacuate.
+         assert_called_with('uuid2', 'node1'))
 
     def test_do_process_accident_vm_recovery_with_stopped(self):
-        self.worker.rc_util_api.do_instance_reset = mock.Mock()
-        self.worker.rc_util_api.do_instance_reset.return_value = ('202',
-                                                                  'success')
+        self.worker.rc_util_api.do_instance_reset.return_value = None
         expected_ret = self.worker.STATUS_NORMAL
 
         ret = self.worker._do_process_accident_vm_recovery(
             'uuid1', 'stopped')
         self.assertEqual(expected_ret, ret)
+        (self.worker.rc_util_api.do_instance_reset.
+         assert_called_with('uuid1', 'stopped'))
+
 
     def test_do_process_accident_vm_recovery_with_resized(self):
-        self.worker.rc_util_api.do_instance_reset = mock.Mock()
-        self.worker.rc_util_api.do_instance_reset.return_value = ('202',
-                                                                  'success')
-        self.worker.rc_util_api.do_instance_stop = mock.Mock()
-        self.worker.rc_util_api.do_instance_stop.return_value = ('202',
-                                                                 'success')
+        self.worker.rc_util_api.do_instance_reset.return_value = None
+        self.worker.rc_util_api.do_instance_stop.return_value = None
+        stopped_server = nova_fakes.FakeNovaServer('uuid1', 'stopped', {})
+        self.worker.rc_util_api.do_instance_show.return_value = stopped_server
+        self.worker.rc_util_api.do_instance_start.return_value = None
 
-        response_body = {
-            "server": {
-                "OS-EXT-STS:vm_state": 'stopped',
-                'metadata': {}
-                }
-            }
-        jsoned_body = json.dumps(response_body)
-
-        self.worker.rc_util_api.do_instance_show = mock.Mock()
-        self.worker.rc_util_api.do_instance_show.return_value = ('200',
-                                                                 jsoned_body)
-
-        self.worker.rc_util_api.do_instance_start = mock.Mock()
-        self.worker.rc_util_api.do_instance_start.return_value = ('202',
-                                                                 'success')
         expected_ret = self.worker.STATUS_NORMAL
 
         ret = self.worker._do_process_accident_vm_recovery(
             'uuid1', 'resized')
 
         self.assertEqual(expected_ret, ret)
+        (self.worker.rc_util_api.do_instance_reset.
+         assert_called_with('uuid1', 'active'))
+        self.worker.rc_util_api.do_instance_stop.assert_called_with('uuid1')
+        self.worker.rc_util_api.do_instance_show.assert_called_with('uuid1')
+        self.worker.rc_util_api.do_instance_start.assert_called_with('uuid1')
 
     def test_do_process_accident_vm_recovery_with_active(self):
-        self.worker.rc_util_api.do_instance_stop = mock.Mock()
-        self.worker.rc_util_api.do_instance_stop.return_value = ('202',
-                                                                 'success')
-
-        response_body = {
-            "server": {
-                "OS-EXT-STS:vm_state": 'stopped',
-                'metadata': {}
-                }
-            }
-        jsoned_body = json.dumps(response_body)
-
-        self.worker.rc_util_api.do_instance_show = mock.Mock()
-        self.worker.rc_util_api.do_instance_show.return_value = ('200',
-                                                                 jsoned_body)
-
-        self.worker.rc_util_api.do_instance_start = mock.Mock()
-        self.worker.rc_util_api.do_instance_start.return_value = ('202',
-                                                                 'success')
+        self.worker.rc_util_api.do_instance_stop.return_value = None
+        stopped_server = nova_fakes.FakeNovaServer('uuid1', 'stopped', {})
+        self.worker.rc_util_api.do_instance_show.return_value = stopped_server
+        self.worker.rc_util_api.do_instance_start.return_value = None
         expected_ret = self.worker.STATUS_NORMAL
 
         ret = self.worker._do_process_accident_vm_recovery(
             'uuid1', 'active')
 
         self.assertEqual(expected_ret, ret)
+        self.worker.rc_util_api.do_instance_stop.assert_called_with('uuid1')
+        self.worker.rc_util_api.do_instance_show.assert_called_with('uuid1')
+        self.worker.rc_util_api.do_instance_start.assert_called_with('uuid1')
 
 
 if __name__ == '__main__':

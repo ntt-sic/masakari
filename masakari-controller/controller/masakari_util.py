@@ -35,6 +35,11 @@ import traceback
 from eventlet import greenthread
 import errno
 
+from keystoneauth1 import loading
+from keystoneauth1 import session
+from keystoneclient import client as keystone_client
+from novaclient import client as nova_client
+from novaclient import exceptions
 from sqlalchemy import exc
 
 parentdir = os.path.abspath(os.path.join(os.path.dirname(__file__),
@@ -47,7 +52,6 @@ if parentdir not in sys.path:
 
 import db.api as dbapi
 from db.models import NotificationList, VmList, ReserveList
-
 
 class RecoveryControllerUtilDb(object):
 
@@ -507,721 +511,202 @@ class RecoveryControllerUtilApi(object):
     API-related utility classes related to VM recovery control
     """
 
+    KEYSTONE_API_VERSION = '3'
+    NOVA_API_VERSION = '2'
+
     def __init__(self, config_object):
         self.rc_config = config_object
         self.rc_util = RecoveryControllerUtil(self.rc_config)
 
-    def do_instance_show(self, uuid):
-        """
-        API-instance_show. Edit the body of the curl is
-        performed using the nova client.
-        :uuid : Instance id to be used in nova cliant curl.
-        :return :response_code :response code
-        :return :rbody :response body(json)
-        """
-        try:
+        project_id = self._fetch_project_id()
+        auth_args = {
+            'auth_url': self.rc_config.conf_nova['auth_url'],
+            'username': self.rc_config.conf_nova['admin_user'],
+            'password': self.rc_config.conf_nova['admin_password'],
+            'project_id': project_id,
+            'user_domain_name': self.rc_config.conf_nova['domain'],
+            'project_domain_name': self.rc_config.conf_nova['domain'],
+            }
 
-            # Set nova_curl_method
-            nova_curl_method = "GET"
-            # Set nova_variable_url
-            nova_variable_url = "/servers/" + uuid
-            # Set nova_body
-            response_code, rbody = self._nova_curl_client(nova_curl_method,
-                                                          nova_variable_url)
-
-        except:
-
-            self.rc_util.syslogout_ex("RecoveryControllerUtilApi_0001",
-                                      syslog.LOG_ERR)
-            error_type, error_value, traceback_ = sys.exc_info()
-            tb_list = traceback.format_tb(traceback_)
-            self.rc_util.syslogout(error_type, syslog.LOG_ERR)
-            self.rc_util.syslogout(error_value, syslog.LOG_ERR)
-            for tb in tb_list:
-                self.rc_util.syslogout(tb, syslog.LOG_ERR)
-
-            msg = "[ nova_curl_method=" + nova_curl_method + " ]"
-            self.rc_util.syslogout(msg, syslog.LOG_ERR)
-            msg = "[ nova_variable_url=" + nova_variable_url + " ]"
-            self.rc_util.syslogout(msg, syslog.LOG_ERR)
-
-            raise
-
-        return response_code, rbody
-
-    def do_instance_stop(self, uuid):
-        """
-        API-stop. Edit the body of the curl is performed using the nova client.
-        :param :uuid : Instance id to be used in nova cliant curl.
-        :return :response_code :response code
-        :return :rbody :response body(json)
-        """
-        try:
-
-            # Set nova_curl_method
-            nova_curl_method = "POST"
-            # Set nova_variable_url
-            nova_variable_url = "/servers/" + uuid + "/action"
-            # Set nova_body
-            nova_body = "{\"os-stop\" : null}"
-
-            response_code, rbody = self._nova_curl_client(nova_curl_method,
-                                                          nova_variable_url,
-                                                          nova_body)
-
-        except:
-            self.rc_util.syslogout_ex("RecoveryControllerUtilApi_0002",
-                                      syslog.LOG_ERR)
-            error_type, error_value, traceback_ = sys.exc_info()
-            tb_list = traceback.format_tb(traceback_)
-            self.rc_util.syslogout(error_type, syslog.LOG_ERR)
-            self.rc_util.syslogout(error_value, syslog.LOG_ERR)
-            for tb in tb_list:
-                self.rc_util.syslogout(tb, syslog.LOG_ERR)
-
-            msg = "[ nova_curl_method=" + nova_curl_method + " ]"
-            self.rc_util.syslogout(msg, syslog.LOG_ERR)
-            msg = "[ nova_variable_url=" + nova_variable_url + " ]"
-            self.rc_util.syslogout(msg, syslog.LOG_ERR)
-            msg = "[ nova_body=" + nova_body + " ]"
-            self.rc_util.syslogout(msg, syslog.LOG_ERR)
-
-            raise
-
-        return response_code, rbody
-
-    def do_instance_start(self, uuid):
-        """
-        API-start. Edit the body of the curl
-        is performed using the nova client.
-        :uuid : Instance id to be used in nova cliant curl.
-        :return :response_code :response code
-        :return :rbody :response body(json)
-        """
-        try:
-
-            # Set nova_curl_method
-            nova_curl_method = "POST"
-            # Set nova_variable_url
-            nova_variable_url = "/servers/" + uuid + "/action"
-            # Set nova_body
-            nova_body = "{\"os-start\" : null}"
-
-            response_code, rbody = self._nova_curl_client(nova_curl_method,
-                                                          nova_variable_url,
-                                                          nova_body)
-
-        except:
-            self.rc_util.syslogout_ex("RecoveryControllerUtilApi_0003",
-                                      syslog.LOG_ERR)
-            error_type, error_value, traceback_ = sys.exc_info()
-            tb_list = traceback.format_tb(traceback_)
-            self.rc_util.syslogout(error_type, syslog.LOG_ERR)
-            self.rc_util.syslogout(error_value, syslog.LOG_ERR)
-            for tb in tb_list:
-                self.rc_util.syslogout(tb, syslog.LOG_ERR)
-
-            msg = "[ nova_curl_method=" + nova_curl_method + " ]"
-            self.rc_util.syslogout(msg, syslog.LOG_ERR)
-            msg = "[ nova_variable_url=" + nova_variable_url + " ]"
-            self.rc_util.syslogout(msg, syslog.LOG_ERR)
-            msg = "[ nova_body=" + nova_body + " ]"
-            self.rc_util.syslogout(msg, syslog.LOG_ERR)
-
-            raise
-
-        return response_code, rbody
-
-    def do_instance_reset(self, uuid, status):
-        """
-        API-reset. Edit the body of the curl
-        is performed using the nova client.
-        :uuid : Instance id to be used in nova cliant curl.
-        :status :Status that you specify for the API.
-        :return :response_code :response code
-        :return :rbody :response body(json)
-
-        todo(masa) replaces curl command with python-novaclient
-        """
-        try:
-
-            # Set nova_curl_method
-            nova_curl_method = "POST"
-            # Set nova_variable_url
-            nova_variable_url = "/servers/" + uuid + "/action"
-
-            # Set nova_body
-            nova_body = "{\"os-resetState\":{\"state\":\"" + status + "\"}}"
-
-            response_code, rbody = self._nova_curl_client(nova_curl_method,
-                                                          nova_variable_url,
-                                                          nova_body)
-
-        except:
-            self.rc_util.syslogout_ex("RecoveryControllerUtilApi_0004",
-                                      syslog.LOG_ERR)
-            error_type, error_value, traceback_ = sys.exc_info()
-            tb_list = traceback.format_tb(traceback_)
-            self.rc_util.syslogout(error_type, syslog.LOG_ERR)
-            self.rc_util.syslogout(error_value, syslog.LOG_ERR)
-            for tb in tb_list:
-                self.rc_util.syslogout(tb, syslog.LOG_ERR)
-
-            msg = "[ nova_curl_method=" + nova_curl_method + " ]"
-            self.rc_util.syslogout(msg, syslog.LOG_ERR)
-            msg = "[ nova_variable_url=" + nova_variable_url + " ]"
-            self.rc_util.syslogout(msg, syslog.LOG_ERR)
-            msg = "[ nova_body=" + nova_body + " ]"
-            self.rc_util.syslogout(msg, syslog.LOG_ERR)
-
-            raise
-
-        return response_code, rbody
-
-    def do_hypervisor_servers(self, hypervisor_hostname):
-        """
-        API_hypervisor_servers. Edit the body of the curl is
-        performed using the nova client.
-        :hypervisor_hostname : The name of the host that runs the hypervisor.
-        :return :response_code :response code
-        :return :rbody :response body(json)
-        """
-        try:
-
-            # Set nova_curl_method
-            nova_curl_method = "GET"
-            # Set nova_variable_url
-            nova_variable_url = "/os-hypervisors/" + \
-                hypervisor_hostname + "/servers"
-
-            response_code, rbody = self._nova_curl_client(nova_curl_method,
-                                                          nova_variable_url)
-
-        except:
-            self.rc_util.syslogout_ex("RecoveryControllerUtilApi_0005",
-                                      syslog.LOG_ERR)
-            error_type, error_value, traceback_ = sys.exc_info()
-            tb_list = traceback.format_tb(traceback_)
-            self.rc_util.syslogout(error_type, syslog.LOG_ERR)
-            self.rc_util.syslogout(error_value, syslog.LOG_ERR)
-            for tb in tb_list:
-                self.rc_util.syslogout(tb, syslog.LOG_ERR)
-
-            msg = "[ nova_curl_method=" + nova_curl_method + " ]"
-            self.rc_util.syslogout(msg, syslog.LOG_ERR)
-            msg = "[ nova_variable_url=" + nova_variable_url + " ]"
-            self.rc_util.syslogout(msg, syslog.LOG_ERR)
-
-            raise
-
-        return response_code, rbody
-
-    def do_host_maintenance_mode(self, hostname, mode):
-        """
-        API_host_maintenance_mode.
-        Edit the body of the curl is performed using the nova client.
-        :hostname: Target host name
-        :mode: change to 'enable'/'disable'
-        :return :response_code :response code
-        :return :rbody :response body(json)
-        """
-
-        nova_variable_url = ""
-        nova_body = ""
-
-        try:
-
-            # Set nova_curl_method
-            nova_curl_method = "PUT"
-
-            # Set nova_variable_url
-            if mode == "enable" or mode == "disable":
-                nova_variable_url = "/os-services/" + mode
-            else:
-                e_msg = "mode is invalid.(mode=%s)" % (mode)
-                raise Exception(e_msg)
-
-            # Set nova_body
-            nova_body = "{\"host\":\"" + hostname + \
-                "\",\"binary\":\"nova-compute\"}"
-
-            response_code, rbody = self._nova_curl_client(nova_curl_method,
-                                                          nova_variable_url,
-                                                          nova_body)
-
-        except:
-
-            self.rc_util.syslogout_ex("RecoveryControllerUtilApi_0006",
-                                      syslog.LOG_ERR)
-            error_type, error_value, traceback_ = sys.exc_info()
-            tb_list = traceback.format_tb(traceback_)
-            self.rc_util.syslogout(error_type, syslog.LOG_ERR)
-            self.rc_util.syslogout(error_value, syslog.LOG_ERR)
-            for tb in tb_list:
-                self.rc_util.syslogout(tb, syslog.LOG_ERR)
-
-            msg = "[ nova_curl_method=" + nova_curl_method + " ]"
-            self.rc_util.syslogout(msg, syslog.LOG_ERR)
-            msg = "[ nova_variable_url=" + nova_variable_url + " ]"
-            self.rc_util.syslogout(msg, syslog.LOG_ERR)
-            msg = "[ nova_body=" + nova_body + " ]"
-            self.rc_util.syslogout(msg, syslog.LOG_ERR)
-
-            raise
-
-        return response_code, rbody
-
-    def do_instance_evacuate(self, uuid, targethost):
-        """
-        API-evacuate. Edit the body of the curl is performed
-        using the nova client.
-        :uuid : Instance id to be used in nova cliant curl.
-        :targethost: The name or ID of the host where the server is evacuated.
-        :return :response_code :response code
-        :return :rbody :response body(json)
-        """
-        try:
-
-            # Set nova_curl_method
-            nova_curl_method = "POST"
-            # Set nova_variable_url
-            nova_variable_url = "/servers/" + uuid + "/action"
-            # Set nova_body
-            nova_body = "{\"evacuate\":{\"host\":\"" + \
-                targethost + "\",\"onSharedStorage\":\"True\"}}"
-
-            response_code, rbody = self._nova_curl_client(nova_curl_method,
-                                                          nova_variable_url,
-                                                          nova_body)
-
-        except:
-
-            self.rc_util.syslogout_ex("RecoveryControllerUtilApi_0007",
-                                      syslog.LOG_ERR)
-            error_type, error_value, traceback_ = sys.exc_info()
-            tb_list = traceback.format_tb(traceback_)
-            self.rc_util.syslogout(error_type, syslog.LOG_ERR)
-            self.rc_util.syslogout(error_value, syslog.LOG_ERR)
-            for tb in tb_list:
-                self.rc_util.syslogout(tb, syslog.LOG_ERR)
-
-            msg = "[ nova_curl_method=" + nova_curl_method + " ]"
-            self.rc_util.syslogout(msg, syslog.LOG_ERR)
-            msg = "[ nova_variable_url=" + nova_variable_url + " ]"
-            self.rc_util.syslogout(msg, syslog.LOG_ERR)
-            msg = "[ nova_body=" + nova_body + " ]"
-            self.rc_util.syslogout(msg, syslog.LOG_ERR)
-
-            raise
-
-        return response_code, rbody
-
-    # TODO(sampath):
-    # Use novaclient and omit this code
-    # For now, imported this code from current release
-    def _get_x_subject_token(self, curl_response):
-
-        x_subject_token = None
-        for line in curl_response:
-            obj = re.match("(X-Subject-Token:\s*)([\w|-]+)", line,
-                           re.IGNORECASE)
-            if obj is not None:
-                x_subject_token = obj.group(2)
-                break
-
-        return x_subject_token
-
-    def _get_body(self, curl_response):
-        return curl_response[-1]
-
-    # TODO(sampath):
-    # Use novaclient and omit this code
-    # For now, imported this code from current release
-    def _exe_curl(self, curl):
+        self.auth_session = self._get_session(auth_args)
 
         conf_dic = self.rc_config.get_value('recover_starter')
-        api_max_retry_cnt = conf_dic.get('api_max_retry_cnt')
-        api_retry_interval = conf_dic.get('api_retry_interval')
+        api_retries = conf_dic.get('api_max_retry_cnt')
 
-        for cnt in range(0, int(api_max_retry_cnt) + 1):
-            line_list = []
-            p = subprocess.Popen(curl,
-                                 shell=True,
-                                 cwd='./',
-                                 stdout=subprocess.PIPE,
-                                 stderr=subprocess.PIPE)
+        self.nova_client = nova_client.Client(self.NOVA_API_VERSION,
+                                              session=self.auth_session,
+                                              connect_retries=api_retries)
 
-            out, err = p.communicate()
-            rc = p.returncode
+    def _get_session(self, auth_args):
+        """ Return Keystone API session object."""
+        loader = loading.get_plugin_loader('password')
+        auth = loader.load_from_options(**auth_args)
+        sess = session.Session(auth=auth)
 
-            self.rc_util.syslogout_ex("RecoveryControllerUtilApi_0008",
-                                      syslog.LOG_INFO)
-            self.rc_util.syslogout("curl request:" + curl, syslog.LOG_INFO)
-            self.rc_util.syslogout("curl response:" + out, syslog.LOG_INFO)
-            self.rc_util.syslogout("curl return code:" + str(rc),
+        return sess
+
+    def _fetch_project_id(self):
+        auth_args = {
+            'auth_url': self.rc_config.conf_nova['auth_url'],
+            'username': self.rc_config.conf_nova['admin_user'],
+            'password': self.rc_config.conf_nova['admin_password'],
+            'project_name': self.rc_config.conf_nova['project_name'],
+            'project_domain_name': self.rc_config.conf_nova['domain'],
+            'user_domain_name': self.rc_config.conf_nova['domain'],
+            }
+        sess = self._get_session(auth_args)
+
+        ks_client = keystone_client.Client(self.KEYSTONE_API_VERSION,
+                                           session=sess)
+        project_name = self.rc_config.conf_nova['project_name']
+        projects = filter(lambda x: (x.name == project_name),
+                         ks_client.projects.list())
+
+        if len(projects) != 1:
+            msg = ("Project name: %s doesn't exist in project list."
+                   % self.rc_config.conf_nova['project_name'])
+            raise KeyError(msg)
+
+        return projects[0].id
+
+    def do_instance_show(self, uuid):
+        """Returns Server Intance.
+
+        :uuid : Instance id
+        :return : Server instance
+        """
+        try:
+            self.rc_util.syslogout('Call Server Details API with %s' % uuid,
                                    syslog.LOG_INFO)
+            server = self.nova_client.servers.get(uuid)
 
-            if rc == 0:
-                line_list = out.splitlines()
-                # If HTTP status code is 5xx, do retry.
-                if re.match("HTTP/1.\d 5\d\d ", line_list[0]) is not None:
-                    greenthread.sleep(int(api_retry_interval))
-                    continue
-                break
-            # If curl response code is error, do retry.
-            elif rc == 28 or rc == 52 or rc == 55 or rc == 56 or rc == 89:
-                greenthread.sleep(int(api_retry_interval))
-                continue
-            else:
-                break
+        except exceptions.ClientException as e:
+            error_code = "[RecoveryControllerUtilApi_0001]"
+            msg = 'Fails to call Nova get Server Details API: %s' % e
+            self.rc_util.syslogout(error_code + msg, syslog.LOG_ERR)
 
-        return line_list
+            raise
 
-    def _nova_curl_client(self,
-                          nova_curl_method=None,
-                          nova_variable_url=None,
-                          nova_body=None,
-                          auth_url=None,
-                          admin_user=None,
-                          admin_password=None,
-                          domain=None,
-                          project_id=None,
-                          project_name=None):
+        return server
 
-        nova_client_url = None
-        token = None
-        response_code = None
-        rbody = None
+    def do_instance_stop(self, uuid):
+        """Call Nova instance stop API.
 
-        # Check Required.
+        :param :uuid : Instance id
+        :return : None if succeed
+        """
         try:
-            if nova_curl_method is None:
-                raise Exception("Need a nova_curl_method.")
-            if nova_curl_method == "POST" \
-               or nova_curl_method == "PUT" \
-               or nova_curl_method == "PATCH":
-                if nova_body is None:
-                    e_msg = "method is %s. Need a nova_body." % (
-                        nova_curl_method)
-                    raise Exception(e_msg)
-        except Exception, e:
+            self.rc_util.syslogout('Call Stop API with %s' % uuid,
+                                   syslog.LOG_INFO)
+            self.nova_client.servers.stop(uuid)
 
-            self.rc_util.syslogout_ex("RecoveryControllerUtilApi_0009",
-                                      syslog.LOG_ERR)
-            error_type, error_value, traceback_ = sys.exc_info()
-            tb_list = traceback.format_tb(traceback_)
-            self.rc_util.syslogout(error_type, syslog.LOG_ERR)
-            self.rc_util.syslogout(error_value, syslog.LOG_ERR)
-            for tb in tb_list:
-                self.rc_util.syslogout(tb, syslog.LOG_ERR)
+        except exceptions.Conflict as e:
+            msg = "Server instance %s is already in stopped." % uuid
+            error_msg = "Original Nova client's error: %e" % e
+            self.rc_util.syslogout(msg + error_msg, syslog.LOG_ERR)
+            raise EnvironmentError(msg)
 
-            msg = e
-            self.rc_util.syslogout(msg, syslog.LOG_ERR)
+        except exceptions.ClientException as e:
+            error_code = "[RecoveryControllerUtilApi_0002]"
+            msg = 'Fails to call Nova Server Stop API: %s' % e
+            self.rc_util.syslogout(error_code + msg, syslog.LOG_ERR)
+            raise
 
-            return None, None
+    def do_instance_start(self, uuid):
+        """Call Nova instance start API.
 
-        # Set default value for optional args.
-        optinal_arg = self.rc_config.get_value('nova')
-        if auth_url is None:
-            auth_url = optinal_arg.get("auth_url")
-        if admin_user is None:
-            admin_user = optinal_arg.get("admin_user")
-        if admin_password is None:
-            admin_password = optinal_arg.get("admin_password")
-        if domain is None:
-            domain = optinal_arg.get("domain")
-        if project_name is None:
-            project_name = optinal_arg.get("project_name")
-
-        api_max_retry_cnt = int(self.rc_config.get_value(
-            "recover_starter").get("api_max_retry_cnt"))
-        api_retry_cnt_get_detail = 0
-        api_retry_cnt_exec_api = 0
-
-        while api_retry_cnt_get_detail <= api_max_retry_cnt and \
-                api_retry_cnt_exec_api <= api_max_retry_cnt:
-
-            # I get a token of admin.
-            nova_client_url, token, project_id, response_code\
-                = self._get_token_admin(auth_url,
-                                        domain,
-                                        admin_user,
-                                        admin_password,
-                                        project_name)
-
-            # Get the admintoken by the project_id in scope in the case of
-            # non-GET
-            if nova_curl_method != "GET":
-                nova_client_url, response_code, rbody\
-                    = self._get_detail(nova_client_url,
-                                       nova_variable_url,
-                                       token)
-
-                # The re-implementation in the case of authentication error
-                if response_code == "401":
-                    api_retry_cnt_get_detail += 1
-                    if api_retry_cnt_get_detail > api_max_retry_cnt:
-                        error_msg = "detail acquisition failure"
-                        raise Exception(error_msg)
-                    else:
-                        continue
-
-                nova_client_url, token, project_id, response_code\
-                    = self._get_token_project_scope(auth_url,
-                                                    domain,
-                                                    admin_user,
-                                                    admin_password,
-                                                    project_id)
-
-            # Run the Objective curl
-            response_code, rbody\
-                = self._run_curl_objective(nova_curl_method,
-                                           nova_client_url,
-                                           nova_variable_url,
-                                           nova_body,
-                                           token)
-
-            # The re-implementation in the case of authentication error
-            if response_code == "401":
-                api_retry_cnt_exec_api += 1
-                api_retry_cnt_get_detail = 0
-            else:
-                break
-
-        return response_code, rbody
-
-    def _get_token_admin(self,
-                         auth_url,
-                         domain,
-                         admin_user,
-                         admin_password,
-                         project_name):
-
-        response_code = None
-
-        # Make curl for get token.
-        token_url = "%s/v3/auth/tokens" % (auth_url)
-        token_body = "{ \"auth\": { \"identity\": { \"methods\": " \
-            "[ \"password\" ], \"password\": { \"user\":" \
-            "{ \"domain\": { \"name\": \"%s\" }, \"name\": " \
-            "\"%s\", \"password\": \"%s\" } } }, \"scope\": " \
-            "{ \"project\": { \"domain\": { \"name\": \"%s\" }, " \
-            "\"name\": \"%s\"} } } }" \
-            % (domain, admin_user, admin_password, domain,
-               project_name)
-
-        token_curl = "curl " \
-            "-i '%s' -X POST -H \"Accept: application/json\" " \
-            "-H \"Content-Type: application/json\" -d '%s'" \
-            % (token_url,
-               token_body)
-
-        # Get token id.
-        token_get_res = self._exe_curl(token_curl)
-
-        if len(token_get_res) == 0:
-            self.rc_util.syslogout_ex("RecoveryControllerUtilApi_0016",
-                                      syslog.LOG_ERR)
-            self.rc_util.syslogout("exec curl command failure", syslog.LOG_ERR)
-            raise Exception("exec curl command failure")
-
-        # Token acquisition
-        token = self._get_x_subject_token(token_get_res)
-
-        response_code = token_get_res[0].split(" ")[1]
-
-        if response_code != "201":
-
-            self.rc_util.syslogout_ex("RecoveryControllerUtilApi_0010",
-                                      syslog.LOG_ERR)
-            self.rc_util.syslogout("token acquisition failure", syslog.LOG_ERR)
-            raise Exception("token acquisition failure")
-
-        # Response body acquisition
-        res_json = json.loads(token_get_res[-1])
-        project_id = res_json.get("token").get("project").get("id")
-
-        catalog_list = res_json.get("token").get("catalog")
-
-        for catalog in catalog_list:
-            name = catalog.get("name")
-            if name == "nova":
-                endpoints = catalog.get("endpoints")
-                for endpoint in endpoints:
-                    interface = endpoint.get("interface")
-                    if interface == "admin":
-                        nova_client_url = endpoint.get("url")
-
-        return nova_client_url, token, project_id, response_code
-
-    def _get_detail(self,
-                    nova_client_url,
-                    nova_variable_url,
-                    token):
-
-        rbody = None
-        response_code = None
-
-        # Join variable url.
-        if nova_variable_url is not None:
-            nova_client_url = "%s%s" % (nova_client_url, "/servers/detail")
-
-        nova_client_curl = "curl " \
-            "-i \"%s\" -X GET " \
-            "-H \"Accept: application/json\" " \
-            "-H \"Content-Type: application/json\" " \
-            "-H \"X-Auth-Token: %s\"" \
-            % (nova_client_url, token)
-        nova_exe_res = self._exe_curl(nova_client_curl)
-
-        if len(nova_exe_res) == 0:
-            self.rc_util.syslogout_ex("RecoveryControllerUtilApi_0017",
-                                      syslog.LOG_ERR)
-            self.rc_util.syslogout("exec curl command failure", syslog.LOG_ERR)
-            raise Exception("exec curl command failure")
-
-        response_code = nova_exe_res[0].split(" ")[1]
-
-        if response_code != "200" and response_code != "401":
-            self.rc_util.syslogout_ex("RecoveryControllerUtilApi_0011",
-                                      syslog.LOG_ERR)
-            self.rc_util.syslogout("detail acquisition failure",
-                                   syslog.LOG_ERR)
-            raise Exception("detail acquisition failure")
-        else:
-            try:
-                rbody = self._get_body(nova_exe_res)
-
-            except Exception, e:
-
-                self.rc_util.syslogout_ex("RecoveryControllerUtilApi_0012",
-                                          syslog.LOG_ERR)
-                error_type, error_value, traceback_ = sys.exc_info()
-                tb_list = traceback.format_tb(traceback_)
-                self.rc_util.syslogout(error_type, syslog.LOG_ERR)
-                self.rc_util.syslogout(error_value, syslog.LOG_ERR)
-                for tb in tb_list:
-                    self.rc_util.syslogout(tb, syslog.LOG_ERR)
-
-                msg = e
-                self.rc_util.syslogout(msg, syslog.LOG_ERR)
-
-        return nova_client_url, response_code, rbody
-
-    def _get_token_project_scope(self,
-                                 auth_url,
-                                 domain,
-                                 admin_user,
-                                 admin_password,
-                                 project_id):
-
-        response_code = None
-
-        # Make curl for get token.
-        token_url = "%s/v3/auth/tokens" % (auth_url)
-        token_body = "{ \"auth\": { \"identity\": { \"methods\": " \
-            "[ \"password\" ], \"password\": { \"user\": " \
-            "{ \"domain\": { \"name\": \"%s\" }, \"name\": \"%s\", " \
-            "\"password\": \"%s\" } } }, \"scope\": { \"project\": " \
-            "{ \"id\": \"%s\"} } } }" \
-            % (domain, admin_user, admin_password, project_id)
-
-        token_curl = "curl " \
-            "-i '%s' -X POST -H \"Accept: application/json\" " \
-            "-H \"Content-Type: application/json\" -d '%s'" \
-            % (token_url, token_body)
-
-        # Get token id.
-        token_get_res = self._exe_curl(token_curl)
-
-        if len(token_get_res) == 0:
-            self.rc_util.syslogout_ex("RecoveryControllerUtilApi_0018",
-                                      syslog.LOG_ERR)
-            self.rc_util.syslogout("exec curl command failure", syslog.LOG_ERR)
-            raise Exception("exec curl command failure")
-
-        response_code = token_get_res[0].split(" ")[1]
-
-        if response_code != "201":
-            self.rc_util.syslogout_ex("RecoveryControllerUtilApi_0013",
-                                      syslog.LOG_ERR)
-            self.rc_util.syslogout("token acquisition failure", syslog.LOG_ERR)
-            raise Exception("token acquisition failure")
-
-        # Token acquisition
-        token = self._get_x_subject_token(token_get_res)
-
-        res_json = json.loads(token_get_res[-1])
-
-        project_id = res_json.get("token").get("project").get("id")
-        catalog_list = res_json.get("token").get("catalog")
-
-        for catalog in catalog_list:
-            name = catalog.get("name")
-            if name == "nova":
-                endpoints = catalog.get("endpoints")
-                for endpoint in endpoints:
-                    interface = endpoint.get("interface")
-                    if interface == "admin":
-                        nova_client_url = endpoint.get("url")
-
-        return nova_client_url, token, project_id, response_code
-
-    def _run_curl_objective(self,
-                            nova_curl_method,
-                            nova_client_url,
-                            nova_variable_url,
-                            nova_body,
-                            token):
-
-        rbody = None
-        response_code = None
-
-        # Join variable url.
-        if nova_variable_url is not None:
-            nova_client_url = "%s%s" % (nova_client_url, nova_variable_url)
-
-        nova_client_curl = "curl " \
-            "-i \"%s\" -X %s -H \"Content-Type: " \
-            "application/json\" -H \"X-Auth-Token: %s\"" \
-            % (nova_client_url, nova_curl_method, token)
-
-        if nova_body is not None:
-            nova_client_curl = "%s -d '%s'" % (nova_client_curl, nova_body)
-
-        nova_exe_res = self._exe_curl(nova_client_curl)
-
-        if len(nova_exe_res) == 0:
-            self.rc_util.syslogout_ex("RecoveryControllerUtilApi_0019",
-                                      syslog.LOG_ERR)
-            self.rc_util.syslogout("exec curl command failure", syslog.LOG_ERR)
-            raise Exception("exec curl command failure")
-
-        response_code = nova_exe_res[0].split(" ")[1]
-
-        if response_code != "200" and response_code != "202":
-            self.rc_util.syslogout_ex("RecoveryControllerUtilApi_0014",
-                                      syslog.LOG_ERR)
-            self.rc_util.syslogout("exec curl command failure", syslog.LOG_ERR)
-
+        :uuid : Instance id
+        :return : None if succeed
+        """
         try:
-            rbody = self._get_body(nova_exe_res)
+            self.rc_util.syslogout('Call Start API with %s' % uuid,
+                                   syslog.LOG_INFO)
+            self.nova_client.servers.start(uuid)
 
-        except Exception, e:
+        except exceptions.Conflict as e:
+            msg = "Server instance %s is already in active." % uuid
+            error_msg = "Original Nova client's error: %e" % e
+            self.rc_util.syslogout(msg + error_msg, syslog.LOG_ERR)
+            raise EnvironmentError(msg)
 
-            self.rc_util.syslogout_ex("RecoveryControllerUtilApi_0015",
-                                      syslog.LOG_ERR)
-            error_type, error_value, traceback_ = sys.exc_info()
-            tb_list = traceback.format_tb(traceback_)
-            self.rc_util.syslogout(error_type, syslog.LOG_ERR)
-            self.rc_util.syslogout(error_value, syslog.LOG_ERR)
-            for tb in tb_list:
-                self.rc_util.syslogout(tb, syslog.LOG_ERR)
+        except exceptions.ClientException as e:
+            error_code = "[RecoveryControllerUtilApi_0003]"
+            msg = 'Fails to call Nova Server Start API: %s' % e
+            self.rc_util.syslogout(error_code + msg, syslog.LOG_ERR)
+            raise
 
-            msg = e
-            self.rc_util.syslogout(msg, syslog.LOG_ERR)
+    def do_instance_reset(self, uuid, status):
+        """ Call Nova reset state API.
 
-        return response_code, rbody
+        :uuid : Instance id
+        :status : Status reset to
+        """
+        try:
+            self.rc_util.syslogout('Call Reset State API with %s to %s' %
+                                   (uuid, status), syslog.LOG_INFO)
+            self.nova_client.servers.reset_state(uuid, status)
+
+        except exceptions.ClientException as e:
+            error_code = "[RecoveryControllerUtilApi_0004]"
+            msg = 'Fails to call Nova Server Reset State API: %s' % e
+            self.rc_util.syslogout(error_code + msg, syslog.LOG_ERR)
+            raise EnvironmentError(msg)
+
+    def fetch_servers_on_hypervisor(self, hypervisor):
+        """Fetch server instance list on the hypervisor.
+
+        :hypervisor : hypervisor's hostname
+        :return : A list of servers
+        """
+        opts = {
+            'host': hypervisor,
+            'all_tenants': True,
+            }
+        try:
+            self.rc_util.syslogout('Fetch Server list on %s' % hypervisor,
+                                   syslog.LOG_INFO)
+            servers = self.nova_client.servers.list(detailed=False,
+                                                    search_opts=opts)
+            return [s.id for s in servers]
+
+        except exceptions.ClientException as e:
+            error_code = "[RecoveryControllerUtilApi_0005]"
+            msg = 'Fails to call Nova Servers List API: %s' % e
+            self.rc_util.syslogout(error_code + msg, syslog.LOG_ERR)
+            raise
+
+    def disable_host_status(self, hostname):
+        """Disable host' status.
+
+        :hostname: Target host name
+        """
+        try:
+            self.rc_util.syslogout('Disable nova-compute on %s' % hostname,
+                                   syslog.LOG_INFO)
+            self.nova_client.services.disable(hostname, 'nova-compute')
+        except exceptions.ClientException as e:
+            error_code = "[RecoveryControllerUtilApi_0006]"
+            msg = 'Fails to disable nova-compute on %s: %s' % (hostname, e)
+            self.rc_util.syslogout(error_code + msg, syslog.LOG_ERR)
+            raise
+
+    def do_instance_evacuate(self, uuid, targethost):
+        """Call evacuate API for server instance.
+
+        :uuid : Instance id
+        :targethost: The name or ID of the host where the server is evacuated.
+        """
+        try:
+            self.rc_util.syslogout('Call Evacuate API with %s to %s' %
+                                   (uuid, targethost), syslog.LOG_INFO)
+            self.nova_client.servers.evacuate(uuid, host=targethost,
+                                              on_shared_storage=True)
+        except exceptions.ClientException as e:
+            error_code = "[RecoveryControllerUtilApi_0007]"
+            msg = ('Fails to call Instance Evacuate API onto %s: %s'
+                   % (targethost, e))
+            self.rc_util.syslogout(error_code + msg, syslog.LOG_ERR)
+            raise
 
 
 class RecoveryControllerUtil(object):

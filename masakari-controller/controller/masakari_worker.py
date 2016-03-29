@@ -68,27 +68,19 @@ class RecoveryControllerWorker(object):
             api_retry_interval = conf_dic.get('api_retry_interval')
             cnt = 0
             while cnt < int(api_max_retry_cnt) + 1:
-                # Call nova show API.
-                rc, rbody = self.rc_util_api.do_instance_show(uuid)
-                rbody = json.loads(rbody)
-
-                if rc == '200':
-                    break
-                elif rc == '500':
+                try:
+                    # Call nova show API.
+                    server = self.rc_util_api.do_instance_show(uuid)
+                    return server
+                except Exception:
                     if cnt == int(api_max_retry_cnt):
                         raise EnvironmentError("Failed to nova show API.")
                     else:
-                        self.rc_util.syslogout_ex(
-                            "RecoveryControllerWorker_0040", syslog.LOG_INFO)
-                        msg = "Retry nova show API."
+                        msg = ("[RecoveryControllerWorker_0040]"
+                               " Retry nova show API.")
                         self.rc_util.syslogout(msg, syslog.LOG_INFO)
                         greenthread.sleep(int(api_retry_interval))
-                else:
-                    raise EnvironmentError("Failed to nova show API.")
-                cnt += 1
-
-            # Set return values.
-            vm_info = rbody.get('server')
+                        cnt += 1
 
         except EnvironmentError:
             self.rc_util.syslogout_ex("RecoveryControllerWorker_0004",
@@ -120,8 +112,6 @@ class RecoveryControllerWorker(object):
             for tb in tb_list:
                 self.rc_util.syslogout(tb, syslog.LOG_ERR)
             raise
-
-        return vm_info
 
     def _get_vmha_param(self, session, uuid, primary_id):
         # TODO(sampath): remove unused 'uuid' form args
@@ -221,22 +211,9 @@ class RecoveryControllerWorker(object):
             # state. If an instance is in resized status, masakari resets the
             # instance state to *error* to evacuate it.
             if vm_state == 'resized':
-                rc, rbody = self.rc_util_api.do_instance_reset(uuid, 'error')
-                if rc != '202':
-                    rbody = json.loads(rbody)
-                    msg = '%s(code:%s)' % (rbody.get('error').get(
-                        'message'), rbody.get('error').get('code'))
-                    raise EnvironmentError(msg)
+                self.rc_util_api.do_instance_reset(uuid, 'error')
 
-            # Execute recovery(Call nova evacuate API).
-            rc, rbody = self.rc_util_api.do_instance_evacuate(
-                uuid, evacuate_node)
-
-            if rc != '200':
-                rbody = json.loads(rbody)
-                msg = '%s(code:%s)' % (rbody.get('error').get(
-                    'message'), rbody.get('error').get('code'))
-                raise EnvironmentError(msg)
+            self.rc_util_api.do_instance_evacuate(uuid, evacuate_node)
 
         except EnvironmentError:
             self.rc_util.syslogout_ex("RecoveryControllerWorker_0013",
@@ -297,13 +274,7 @@ class RecoveryControllerWorker(object):
         status = self.STATUS_NORMAL
 
         try:
-            # Call nova reset-state API(do not wait for sync).
-            rc, rbody = self.rc_util_api.do_instance_reset(uuid, 'error')
-            if rc != '202':
-                rbody = json.loads(rbody)
-                msg = '%s(code:%s)' % (rbody.get('error').get(
-                    'message'), rbody.get('error').get('code'))
-                raise EnvironmentError(msg)
+            self.rc_util_api.do_instance_reset(uuid, 'error')
 
             self.rc_util.syslogout_ex("RecoveryControllerWorker_0017",
                                       syslog.LOG_INFO)
@@ -346,30 +317,13 @@ class RecoveryControllerWorker(object):
             # since there is no instance on the hypervisor. However,
             # in some race conditions, it could happen.
             if vm_state == 'stopped':
-                rc, rbody = self.rc_util_api.do_instance_reset(
-                    uuid, 'stopped')
-                if rc != '202':
-                    rbody = json.loads(rbody)
-                    msg = '%s(code:%s)' % (rbody.get('error').get(
-                        'message'), rbody.get('error').get('code'))
-                    raise EnvironmentError(msg)
+                self.rc_util_api.do_instance_reset(uuid, 'stopped')
                 return status
 
             if vm_state == 'resized':
-                rc, rbody = self.rc_util_api.do_instance_reset(uuid, 'error')
-                if rc != '202':
-                    rbody = json.loads(rbody)
-                    msg = '%s(code:%s)' % (rbody.get('error').get(
-                        'message'), rbody.get('error').get('code'))
-                    raise EnvironmentError(msg)
+                self.rc_util_api.do_instance_reset(uuid, 'active')
 
-            # Call nova stop API.
-            rc, rbody = self.rc_util_api.do_instance_stop(uuid)
-            if rc != '202':
-                rbody = json.loads(rbody)
-                msg = '%s(code:%s)' % (rbody.get('error').get(
-                    'message'), rbody.get('error').get('code'))
-                raise EnvironmentError(msg)
+            self.rc_util_api.do_instance_stop(uuid)
 
             # Wait to be in the Stopped.
             conf_dic = self.rc_config.get_value('recover_starter')
@@ -379,7 +333,7 @@ class RecoveryControllerWorker(object):
 
             while loop_cnt < int(api_check_max_cnt):
                 vm_info = self._get_vm_param(uuid)
-                vm_state = vm_info.get('OS-EXT-STS:vm_state')
+                vm_state = getattr(vm_info, 'OS-EXT-STS:vm_state')
                 if vm_state == 'stopped':
                     break
                 else:
@@ -390,41 +344,7 @@ class RecoveryControllerWorker(object):
                 msg = "vm_state did not become stopped."
                 raise EnvironmentError(msg)
 
-            # Call nova start API.
-            rc, rbody = self.rc_util_api.do_instance_start(uuid)
-
-            if rc != '202' and rc != '409':
-                rbody = json.loads(rbody)
-                msg = '%s(code:%s)' % (rbody.get('error').get(
-                        'message'), rbody.get('error').get('code'))
-                raise EnvironmentError(msg)
-            elif rc == '409':
-                rbody = json.loads(rbody)
-                return_message = rbody.get('conflictingRequest').get(
-                    'message')
-                ignore_message_list = []
-                #  juno
-                ignore_message_list.append(
-                    "in vm_state active. "
-                    "Cannot start while the instance "
-                    "is in this state.")
-                # kilo
-                ignore_message_list.append(
-                    "while it is in vm_state active")
-
-                def msg_filter(return_message, ignore_message_list):
-                    #TODO(sampath):
-                    # Make this simple and opnestak version independet
-                    # This patch is to absorb the message diff in juno and kilo
-                    # juno message
-                    for ignore_message in ignore_message_list:
-                        if ignore_message in return_message:
-                            return True
-                    return False
-
-                if not msg_filter(return_message, ignore_message_list):
-                    msg = '%s(code:%s)' % (return_message, rc)
-                    raise EnvironmentError(msg)
+            self.rc_util_api.do_instance_start(uuid)
 
         except EnvironmentError:
             self.rc_util.syslogout_ex("RecoveryControllerWorker_0020",
@@ -455,53 +375,14 @@ class RecoveryControllerWorker(object):
         status = self.STATUS_NORMAL
 
         try:
-            # Call nova reset-state API.
-            rc, rbody = self.rc_util_api.do_instance_reset(uuid, 'error')
-            if rc != '202':
-                rbody = json.loads(rbody)
-                msg = '%s(code:%s)' % (rbody.get('error').get(
-                    'message'), rbody.get('error').get('code'))
-                raise EnvironmentError(msg)
+            self.rc_util_api.do_instance_reset(uuid, 'error')
 
             # Call nova stop API.
-            rc, rbody = self.rc_util_api.do_instance_stop(uuid)
-            if rc != '202' and rc != '409':
-                rbody = json.loads(rbody)
-                msg = '%s(code:%s)' % (rbody.get('error').get(
-                    'message'), rbody.get('error').get('code'))
-                raise EnvironmentError(msg)
-            elif rc == '409':
-                rbody = json.loads(rbody)
-                return_message = rbody.get('conflictingRequest').get(
-                    'message')
+            self.rc_util_api.do_instance_stop(uuid)
 
-                ignore_message_list = []
-                # juno
-                ignore_message_list.append(
-                    "in vm_state stopped. "
-                    "Cannot stop while the instance "
-                    "is in this state.")
-                # kilo
-                ignore_message_list.append(
-                    "while it is in vm_state stopped")
-
-                def msg_filter(return_message, ignore_message_list):
-                    # TODO(sampath)
-                    # see the previous comment for def msg_filter
-                    for ignore_message in ignore_message_list:
-                        if ignore_message in return_message:
-                            return True
-                    return False
-
-                if not msg_filter(return_message, ignore_message_list):
-                    msg = '%s(code:%s)' % (return_message, rc)
-                    raise EnvironmentError(msg)
-
-            self.rc_util.syslogout_ex("RecoveryControllerWorker_0022",
-                                      syslog.LOG_INFO)
-            msg = "Skipped recovery. " \
-                  "instance_id:%s, " \
-                  "accident type: [qemu process accident]." % (uuid)
+            msg = "[RecoveryControllerWorker_0022]"
+            msg += ("Skipped recovery. instance_id:%s, "
+                    "accident type: [qemu process accident]." % uuid)
             self.rc_util.syslogout(msg, syslog.LOG_INFO)
 
         except EnvironmentError:
@@ -537,14 +418,7 @@ class RecoveryControllerWorker(object):
         try:
             db_engine = dbapi.get_engine()
             session = dbapi.get_session(db_engine)
-            rc, rbody = self.rc_util_api.do_host_maintenance_mode(hostname,
-                                                                  'disable')
-            if rc != '200':
-                self.rc_util.syslogout_ex("RecoveryControllerWorker_0029",
-                                          syslog.LOG_ERR)
-                msg = "Failed to nova API. change to disable."
-                self.rc_util.syslogout(msg, syslog.LOG_ERR)
-                raise Exception(msg)
+            self.rc_util_api.disable_host_status(hostname)
 
             if update_progress is True:
                 self.rc_util_db.update_notification_list_db(
@@ -593,7 +467,7 @@ class RecoveryControllerWorker(object):
 
             # Get vm infomation.
             vm_info = self._get_vm_param(uuid)
-            HA_Enabled = vm_info.get('metadata').get('HA-Enabled')
+            HA_Enabled = vm_info.metadata.get('HA-Enabled')
             if HA_Enabled:
                 HA_Enabled = HA_Enabled.upper()
             if HA_Enabled != 'OFF':
@@ -601,7 +475,7 @@ class RecoveryControllerWorker(object):
 
             # Set recovery parameter.
             exe_param = {}
-            exe_param['vm_state'] = vm_info.get('OS-EXT-STS:vm_state')
+            exe_param['vm_state'] = getattr(vm_info, 'OS-EXT-STS:vm_state')
             exe_param['HA-Enabled'] = HA_Enabled
             recover_by, recover_to = self._get_vmha_param(
                 session, uuid, primary_id)

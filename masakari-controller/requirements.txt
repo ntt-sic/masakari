@@ -7,3 +7,4 @@ paramiko>=1.16.0
 pycrypto>=2.6.1
 wsgiref>=0.1.2
 python-novaclient>=3.3.0
+python-keystoneclient>=2.3.1
