@@ -21,7 +21,6 @@ This file defines the RecoveryControllerConfig class.
 
 import ConfigParser
 import syslog
-import MySQLdb
 import paramiko
 import sys
 import os

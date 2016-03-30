@@ -20,7 +20,6 @@ This file defines the RecoveryControllerStarter class.
 """
 
 import threading
-#import MySQLdb
 import sys
 import datetime
 import ConfigParser

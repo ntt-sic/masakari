@@ -20,7 +20,6 @@ This file defines RecoveryControllerWorker class.
 """
 
 import ConfigParser
-import MySQLdb
 import syslog
 import traceback
 import sys
@@ -175,7 +174,6 @@ class RecoveryControllerWorker(object):
                         vm_state == 'stopped' or \
                         vm_state == 'resized':
                     res = self._do_node_accident_vm_recovery(
-                        session,
                         uuid, vm_state, recover_to)
                 else:
                     self.rc_util.syslogout_ex("RecoveryControllerWorker_0041",
@@ -200,8 +198,7 @@ class RecoveryControllerWorker(object):
 
         return res
 
-    def _do_node_accident_vm_recovery(self, session,
-                                      uuid, vm_state, evacuate_node):
+    def _do_node_accident_vm_recovery(self, uuid, vm_state, evacuate_node):
 
         try:
             # Initalize status.
@@ -217,16 +214,6 @@ class RecoveryControllerWorker(object):
 
         except EnvironmentError:
             self.rc_util.syslogout_ex("RecoveryControllerWorker_0013",
-                                      syslog.LOG_ERR)
-            status = self.STATUS_ERROR
-            error_type, error_value, traceback_ = sys.exc_info()
-            tb_list = traceback.format_tb(traceback_)
-            self.rc_util.syslogout(error_type, syslog.LOG_ERR)
-            self.rc_util.syslogout(error_value, syslog.LOG_ERR)
-            for tb in tb_list:
-                self.rc_util.syslogout(tb, syslog.LOG_ERR)
-        except MySQLdb.Error:
-            self.rc_util.syslogout_ex("RecoveryControllerWorker_0014",
                                       syslog.LOG_ERR)
             status = self.STATUS_ERROR
             error_type, error_value, traceback_ = sys.exc_info()
@@ -512,17 +499,6 @@ class RecoveryControllerWorker(object):
             for tb in tb_list:
                 self.rc_util.syslogout(tb, syslog.LOG_ERR)
             return
-        except MySQLdb.Error:
-            self.rc_util.syslogout_ex("RecoveryControllerWorker_0036",
-                                      syslog.LOG_ERR)
-            status = self.STATUS_ERROR
-            error_type, error_value, traceback_ = sys.exc_info()
-            tb_list = traceback.format_tb(traceback_)
-            self.rc_util.syslogout(error_type, syslog.LOG_ERR)
-            self.rc_util.syslogout(error_value, syslog.LOG_ERR)
-            for tb in tb_list:
-                self.rc_util.syslogout(tb, syslog.LOG_ERR)
-            return
         except:
             self.rc_util.syslogout_ex("RecoveryControllerWorker_0037",
                                       syslog.LOG_ERR)
@@ -549,17 +525,6 @@ class RecoveryControllerWorker(object):
                 # Release semaphore
                 if sem:
                     sem.release()
-
-            except MySQLdb.Error:
-                self.rc_util.syslogout_ex("RecoveryControllerWorker_0038",
-                                          syslog.LOG_ERR)
-                error_type, error_value, traceback_ = sys.exc_info()
-                tb_list = traceback.format_tb(traceback_)
-                self.rc_util.syslogout(error_type, syslog.LOG_ERR)
-                self.rc_util.syslogout(error_value, syslog.LOG_ERR)
-                for tb in tb_list:
-                    self.rc_util.syslogout(tb, syslog.LOG_ERR)
-                return
             except:
                 self.rc_util.syslogout_ex("RecoveryControllerWorker_0039",
                                           syslog.LOG_ERR)
