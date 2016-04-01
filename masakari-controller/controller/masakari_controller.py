@@ -80,7 +80,7 @@ class RecoveryController(object):
             self.rc_util = util(self.rc_config)
             self.rc_util_db = util_db(self.rc_config)
             self.rc_worker = worker.RecoveryControllerWorker(self.rc_config)
-        except:
+        except Exception as e:
             logger = logging.getLogger()
             logger.setLevel(logging.ERROR)
             f = "%(asctime)s " + \
@@ -103,7 +103,8 @@ class RecoveryController(object):
             fh.setFormatter(formatter)
             logger.addHandler(fh)
 
-            msg = "--MonitoringMessage--ID:[%s]" % ("RecoveryController_0003")
+            msg = ("--MonitoringMessage--ID:[RecoveryController_0003]"
+                   "An error during initializing masakari controller: %s" % e)
             logger.error(msg)
 
             error_type, error_value, traceback_ = sys.exc_info()
