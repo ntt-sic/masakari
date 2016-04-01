@@ -24,7 +24,9 @@ Try [masakari-deploy](https://github.com/ntt-sic/masakari-deploy) for all-in-one
     - Deploy OpenStack Compute with a shared file system
 
 * pacemaker
-    - Setup stonith resources external/ipmi
+    - Setup stonith resources to make sure a failed host must be in shutdown after an error
+         - If the host is in power-on after evacuating, it could cause double mounted volumes because of
+           the Nova evacuate API's spec.
 
 * packages
     - python-daemon: apt-get install python-daemon
