@@ -37,6 +37,6 @@ The section describes Masakari's processes monitor what failures.
 
 | Monitoring Processes | Failures | Related Event Types |
 | :--- | :--- | :--- |
-| instancemonitor | VM instance process crush or killing a VM instance | instance down |
+| instancemonitor | VM instance process crash or killing a VM instance | instance down |
 | processmonitor | monitored process goes down and unable to restart it | process down |
 | hostmonitor | host status in pacemaker is changed to OFFLINE or RemoteOFFLINE | host down |
