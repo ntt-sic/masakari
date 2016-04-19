@@ -11,7 +11,7 @@ process or not.
 
 ## Evacuation patterns
 
-The section shows events that tigger Masakari to call nova API and evacuation patterns
+The section shows events that trigger Masakari to call nova API and evacuation patterns
 based on the events.
 Conditions when the monitoring processes send an event is listed in Detected Failure section.
 
