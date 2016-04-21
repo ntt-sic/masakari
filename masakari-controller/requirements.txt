@@ -1,4 +1,5 @@
 # MySQL-python still used in utils/*.py scripts
+pytz>=2016.3
 MySQL-python>=1.2.5
 argparse>=1.2.1
 ecdsa>=0.13
