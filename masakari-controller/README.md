@@ -16,7 +16,7 @@
 
    Centos 7:
 
-   	Use MariaDB instead of MySQL. MariaDb is a open source equivalent to MySQL and can be installed with
+   	Use MariaDB instead of MySQL. MariaDB is a open source equivalent to MySQL and can be installed with
 
 	```sh
 	#yum -y install mariadb-server mariadb
@@ -42,7 +42,7 @@
 	#rpm -ivh mysql-community-release-el7-5.noarch.rpm
 	#yum update
 	```
-	and then you can install MySQLl like you normally do.
+	and then you can install MySQL like you normally do.
 
 	```sh
 	#yum install mysql-server
@@ -93,8 +93,19 @@
    ```sh
    #yum groupinstall -y development
    ```
+3. Create configuration file for masakari controller
 
-3. Create db and tables
+   Create the configuration file /etc/masakari/masakari-controller.conf.
+
+   Sample configuration file is located in,
+
+   masakari-controller/etc/masakari-controller.conf.sample
+
+   > For minimum configurations,
+   > You must change the parameters in [db] and [nova] sections.
+
+
+4. Create db and tables
 
    All the tools you need to create the db and tables are in,
    masakari/masakari-controller/db/
@@ -103,21 +114,12 @@
    ```sh
    $cd masakari/masakari-controller/db/
    ```
-
-   First, configure the db.conf
-
-   ~~~
-      DB_USER=[db user name]
-      DB_PASSWORD=[pwd for the user]
-      DB_HOST=[fqdn or ip for the db server]
-   ~~~
-
    Then, this will create the db and required tables for masakari-controller
 
    ```sh
    $./create_database.sh
    ```
-4. Setup
+5. Setup
 
    Go to masakari/masakari-controller and,
 
