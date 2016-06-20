@@ -47,7 +47,6 @@ import controller.masakari_config as config
 # import controller.masakari_util.RecoveryControllerUtil as util
 # from controller import masari_config as config
 # from controller import masakari_util as util
-rc_config = config.RecoveryControllerConfig()
 
 _SESSION = sessionmaker()
 

@@ -20,15 +20,14 @@ This file defines RecoveryControllerWorker class.
 """
 
 import ConfigParser
-import syslog
 import traceback
 import sys
 import json
 import datetime
-from eventlet import greenthread
 # import masakari_config as config
 import masakari_util as util
 import os
+from eventlet import greenthread
 parentdir = os.path.abspath(os.path.join(os.path.dirname(__file__),
                                          os.path.pardir))
 # rootdir = os.path.abspath(os.path.join(parentdir, os.path.pardir))
@@ -38,7 +37,9 @@ if parentdir not in sys.path:
     sys.path = [parentdir] + sys.path
 
 import db.api as dbapi
+from oslo_log import log as logging
 
+LOG = logging.getLogger(__name__)
 
 class RecoveryControllerWorker(object):
 
@@ -50,6 +51,11 @@ class RecoveryControllerWorker(object):
     def __init__(self, config_object):
         self.rc_config = config_object
         self.rc_util = util.RecoveryControllerUtil(self.rc_config)
+
+        msg = ("BEGIN __init__: " \
+               "parameters (config_object=%s)" % (config_object))
+        LOG.debug(self.rc_util.msg_with_thread_id(msg))
+
         self.rc_util_db = util.RecoveryControllerUtilDb(self.rc_config)
         self.rc_util_api = util.RecoveryControllerUtilApi(self.rc_config)
 
@@ -58,9 +64,16 @@ class RecoveryControllerWorker(object):
 
 #        self.WAIT_SYNC_TIME_SEC = 60
 
+        msg = "END __init__"
+        LOG.debug(self.rc_util.msg_with_thread_id(msg))
+
     def _get_vm_param(self, uuid):
 
         try:
+            msg = ("BEGIN _get_vm_param: " \
+                   "parameters (uuid=%s)" % (uuid))
+            LOG.debug(self.rc_util.msg_with_thread_id(msg))
+
             # Initalize return values.
             conf_dic = self.rc_config.get_value('recover_starter')
             api_max_retry_cnt = conf_dic.get('api_max_retry_cnt')
@@ -70,52 +83,63 @@ class RecoveryControllerWorker(object):
                 try:
                     # Call nova show API.
                     server = self.rc_util_api.do_instance_show(uuid)
+
+                    msg = ("END _get_vm_param: " \
+                           "return %s" % (server))
+                    LOG.debug(self.rc_util.msg_with_thread_id(msg))
+
                     return server
                 except Exception:
                     if cnt == int(api_max_retry_cnt):
                         raise EnvironmentError("Failed to nova show API.")
                     else:
-                        msg = ("[RecoveryControllerWorker_0040]"
-                               " Retry nova show API.")
-                        self.rc_util.syslogout(msg, syslog.LOG_INFO)
+                        msg = (" Retry nova show API.")
+                        LOG.info(self.rc_util.msg_with_thread_id(msg))
                         greenthread.sleep(int(api_retry_interval))
                         cnt += 1
 
+            msg = "END _get_vm_param"
+            LOG.debug(self.rc_util.msg_with_thread_id(msg))
+
         except EnvironmentError:
-            self.rc_util.syslogout_ex("RecoveryControllerWorker_0004",
-                                      syslog.LOG_ERR)
             error_type, error_value, traceback_ = sys.exc_info()
             tb_list = traceback.format_tb(traceback_)
-            self.rc_util.syslogout(error_type, syslog.LOG_ERR)
-            self.rc_util.syslogout(error_value, syslog.LOG_ERR)
+            LOG.error(self.rc_util.msg_with_thread_id(error_type))
+            LOG.error(self.rc_util.msg_with_thread_id(error_value))
             for tb in tb_list:
-                self.rc_util.syslogout(tb, syslog.LOG_ERR)
+                LOG.error(self.rc_util.msg_with_thread_id(tb))
             raise EnvironmentError
         except KeyError:
-            self.rc_util.syslogout_ex("RecoveryControllerWorker_0005",
-                                      syslog.LOG_ERR)
             error_type, error_value, traceback_ = sys.exc_info()
             tb_list = traceback.format_tb(traceback_)
-            self.rc_util.syslogout(error_type, syslog.LOG_ERR)
-            self.rc_util.syslogout(error_value, syslog.LOG_ERR)
+            LOG.error(self.rc_util.msg_with_thread_id(error_type))
+            LOG.error(self.rc_util.msg_with_thread_id(error_value))
             for tb in tb_list:
-                self.rc_util.syslogout(tb, syslog.LOG_ERR)
+                LOG.error(self.rc_util.msg_with_thread_id(tb))
             raise KeyError
         except:
-            self.rc_util.syslogout_ex("RecoveryControllerWorker_0006",
-                                      syslog.LOG_ERR)
             error_type, error_value, traceback_ = sys.exc_info()
             tb_list = traceback.format_tb(traceback_)
-            self.rc_util.syslogout(error_type, syslog.LOG_ERR)
-            self.rc_util.syslogout(error_value, syslog.LOG_ERR)
+            LOG.error(self.rc_util.msg_with_thread_id(error_type))
+            LOG.error(self.rc_util.msg_with_thread_id(error_value))
             for tb in tb_list:
-                self.rc_util.syslogout(tb, syslog.LOG_ERR)
+                LOG.error(self.rc_util.msg_with_thread_id(tb))
             raise
 
     def _get_vmha_param(self, session, uuid, primary_id):
         # TODO(sampath): remove unused 'uuid' form args
         try:
+            msg = ("BEGIN _get_vmha_param: " \
+                   "parameters (session=%s, uuid=%s, primary_id=%s)" \
+                % (session, uuid, primary_id))
+            LOG.debug(self.rc_util.msg_with_thread_id(msg))
+
+            msg = "Do get_vm_list_by_id."
+            LOG.info(self.rc_util.msg_with_thread_id(msg))
             recover_data = dbapi.get_vm_list_by_id(session, primary_id)
+            msg = "Succeeded in get_vm_list_by_id. " \
+                + "Return_value = " + str(recover_data)
+            LOG.info(self.rc_util.msg_with_thread_id(msg))
 
             if recover_data is None:
                 raise EnvironmentError("Failed to recovery info.")
@@ -125,40 +149,46 @@ class RecoveryControllerWorker(object):
             recover_to = recover_data.recover_to
 
         except EnvironmentError:
-            self.rc_util.syslogout_ex("RecoveryControllerWorker_0007",
-                                      syslog.LOG_ERR)
             error_type, error_value, traceback_ = sys.exc_info()
             tb_list = traceback.format_tb(traceback_)
-            self.rc_util.syslogout(error_type, syslog.LOG_ERR)
-            self.rc_util.syslogout(error_value, syslog.LOG_ERR)
+            LOG.error(self.rc_util.msg_with_thread_id(error_type))
+            LOG.error(self.rc_util.msg_with_thread_id(error_value))
             for tb in tb_list:
-                self.rc_util.syslogout(tb, syslog.LOG_ERR)
+                LOG.error(self.rc_util.msg_with_thread_id(tb))
             raise EnvironmentError
         except KeyError:
-            self.rc_util.syslogout_ex("RecoveryControllerWorker_0008",
-                                      syslog.LOG_ERR)
             error_type, error_value, traceback_ = sys.exc_info()
             tb_list = traceback.format_tb(traceback_)
-            self.rc_util.syslogout(error_type, syslog.LOG_ERR)
-            self.rc_util.syslogout(error_value, syslog.LOG_ERR)
+            LOG.error(self.rc_util.msg_with_thread_id(error_type))
+            LOG.error(self.rc_util.msg_with_thread_id(error_value))
             for tb in tb_list:
-                self.rc_util.syslogout(tb, syslog.LOG_ERR)
+                LOG.error(self.rc_util.msg_with_thread_id(tb))
             raise KeyError
         except:
-            self.rc_util.syslogout_ex("RecoveryControllerWorker_0010",
-                                      syslog.LOG_ERR)
             error_type, error_value, traceback_ = sys.exc_info()
             tb_list = traceback.format_tb(traceback_)
-            self.rc_util.syslogout(error_type, syslog.LOG_ERR)
-            self.rc_util.syslogout(error_value, syslog.LOG_ERR)
+            LOG.error(self.rc_util.msg_with_thread_id(error_type))
+            LOG.error(self.rc_util.msg_with_thread_id(error_value))
             for tb in tb_list:
-                self.rc_util.syslogout(tb, syslog.LOG_ERR)
+                LOG.error(self.rc_util.msg_with_thread_id(tb))
             raise
+
+        msg = ("END _get_vmha_param: " \
+               "return %s, %s" % (recover_by, recover_to))
+        LOG.debug(self.rc_util.msg_with_thread_id(msg))
 
         return recover_by, recover_to
 
     def _execute_recovery(self, session, uuid, vm_state, HA_Enabled,
                           recover_by, recover_to):
+
+        msg = ("BEGIN _execute_recovery: " \
+               "parameters (session=%s, uuid=%s, " \
+               "vm_state=%s, HA_Enabled=%s" \
+               "recover_by=%s, recover_to=%s)" \
+               % (session, uuid, vm_state, HA_Enabled, \
+                  recover_by, recover_to))
+        LOG.debug(self.rc_util.msg_with_thread_id(msg))
 
         # Initalize status.
         res = self.STATUS_NORMAL
@@ -176,11 +206,9 @@ class RecoveryControllerWorker(object):
                     res = self._do_node_accident_vm_recovery(
                         uuid, vm_state, recover_to)
                 else:
-                    self.rc_util.syslogout_ex("RecoveryControllerWorker_0041",
-                                              syslog.LOG_INFO)
                     msg = "Inapplicable vm. instance_uuid = '%s', " \
                           "vm_state = '%s'" % (uuid, vm_state)
-                    self.rc_util.syslogout(msg, syslog.LOG_INFO)
+                    LOG.info(self.rc_util.msg_with_thread_id(msg))
 
             elif HA_Enabled == 'OFF':
                 res = self._skip_node_accident_vm_recovery(
@@ -196,11 +224,20 @@ class RecoveryControllerWorker(object):
                 res = self._skip_process_accident_vm_recovery(
                     uuid, vm_state)
 
+        msg = ("END _execute_recovery: " \
+               "return %s" % (res))
+        LOG.debug(self.rc_util.msg_with_thread_id(msg))
+
         return res
 
     def _do_node_accident_vm_recovery(self, uuid, vm_state, evacuate_node):
 
         try:
+            msg = ("BEGIN _do_node_accident_vm_recovery: " \
+                   "parameters (uuid=%s, vm_state=%s, evacuate_node=%s)" \
+                   % (uuid, vm_state, evacuate_node))
+            LOG.debug(self.rc_util.msg_with_thread_id(msg))
+
             # Initalize status.
             status = self.STATUS_NORMAL
 
@@ -213,49 +250,49 @@ class RecoveryControllerWorker(object):
             self.rc_util_api.do_instance_evacuate(uuid, evacuate_node)
 
         except EnvironmentError:
-            self.rc_util.syslogout_ex("RecoveryControllerWorker_0013",
-                                      syslog.LOG_ERR)
             status = self.STATUS_ERROR
             error_type, error_value, traceback_ = sys.exc_info()
             tb_list = traceback.format_tb(traceback_)
-            self.rc_util.syslogout(error_type, syslog.LOG_ERR)
-            self.rc_util.syslogout(error_value, syslog.LOG_ERR)
+            LOG.error(self.rc_util.msg_with_thread_id(error_type))
+            LOG.error(self.rc_util.msg_with_thread_id(error_value))
             for tb in tb_list:
-                self.rc_util.syslogout(tb, syslog.LOG_ERR)
+                LOG.error(self.rc_util.msg_with_thread_id(tb))
         except KeyError:
-            self.rc_util.syslogout_ex("RecoveryControllerWorker_0015",
-                                      syslog.LOG_ERR)
             status = self.STATUS_ERROR
             error_type, error_value, traceback_ = sys.exc_info()
             tb_list = traceback.format_tb(traceback_)
-            self.rc_util.syslogout(error_type, syslog.LOG_ERR)
-            self.rc_util.syslogout(error_value, syslog.LOG_ERR)
+            LOG.error(self.rc_util.msg_with_thread_id(error_type))
+            LOG.error(self.rc_util.msg_with_thread_id(error_value))
             for tb in tb_list:
-                self.rc_util.syslogout(tb, syslog.LOG_ERR)
+                LOG.error(self.rc_util.msg_with_thread_id(tb))
         except ValueError:
-            self.rc_util.syslogout_ex("RecoveryControllerWorker_0012",
-                                      syslog.LOG_ERR)
             status = self.STATUS_ERROR
             error_type, error_value, traceback_ = sys.exc_info()
             tb_list = traceback.format_tb(traceback_)
-            self.rc_util.syslogout(error_type, syslog.LOG_ERR)
-            self.rc_util.syslogout(error_value, syslog.LOG_ERR)
+            LOG.error(self.rc_util.msg_with_thread_id(error_type))
+            LOG.error(self.rc_util.msg_with_thread_id(error_value))
             for tb in tb_list:
-                self.rc_util.syslogout(tb, syslog.LOG_ERR)
+                LOG.error(self.rc_util.msg_with_thread_id(tb))
         except:
-            self.rc_util.syslogout_ex("RecoveryControllerWorker_0016",
-                                      syslog.LOG_ERR)
             status = self.STATUS_ERROR
             error_type, error_value, traceback_ = sys.exc_info()
             tb_list = traceback.format_tb(traceback_)
-            self.rc_util.syslogout(error_type, syslog.LOG_ERR)
-            self.rc_util.syslogout(error_value, syslog.LOG_ERR)
+            LOG.error(self.rc_util.msg_with_thread_id(error_type))
+            LOG.error(self.rc_util.msg_with_thread_id(error_value))
             for tb in tb_list:
-                self.rc_util.syslogout(tb, syslog.LOG_ERR)
+                LOG.error(self.rc_util.msg_with_thread_id(tb))
+
+        msg = ("END _do_node_accident_vm_recovery: " \
+               "return %s" % (status))
+        LOG.debug(self.rc_util.msg_with_thread_id(msg))
 
         return status
 
     def _skip_node_accident_vm_recovery(self, uuid, vm_state):
+        msg = ("BEGIN _skip_node_accident_vm_recovery: " \
+               "parameters (uuid=%s, vm_state=%s)" \
+               % (uuid, vm_state))
+        LOG.debug(self.rc_util.msg_with_thread_id(msg))
 
         # Initalize status.
         status = self.STATUS_NORMAL
@@ -263,37 +300,39 @@ class RecoveryControllerWorker(object):
         try:
             self.rc_util_api.do_instance_reset(uuid, 'error')
 
-            self.rc_util.syslogout_ex("RecoveryControllerWorker_0017",
-                                      syslog.LOG_INFO)
             msg = "Skipped recovery. " \
                   "instance_id:%s, " \
                   "accident type: [node accident]." % (uuid)
-            self.rc_util.syslogout(msg, syslog.LOG_INFO)
+            LOG.info(self.rc_util.msg_with_thread_id(msg))
 
         except EnvironmentError:
-            self.rc_util.syslogout_ex("RecoveryControllerWorker_0018",
-                                      syslog.LOG_ERR)
             status = self.STATUS_ERROR
             error_type, error_value, traceback_ = sys.exc_info()
             tb_list = traceback.format_tb(traceback_)
-            self.rc_util.syslogout(error_type, syslog.LOG_ERR)
-            self.rc_util.syslogout(error_value, syslog.LOG_ERR)
+            LOG.error(self.rc_util.msg_with_thread_id(error_type))
+            LOG.error(self.rc_util.msg_with_thread_id(error_value))
             for tb in tb_list:
-                self.rc_util.syslogout(tb, syslog.LOG_ERR)
+                LOG.error(self.rc_util.msg_with_thread_id(tb))
         except:
-            self.rc_util.syslogout_ex("RecoveryControllerWorker_0019",
-                                      syslog.LOG_ERR)
             status = self.STATUS_ERROR
             error_type, error_value, traceback_ = sys.exc_info()
             tb_list = traceback.format_tb(traceback_)
-            self.rc_util.syslogout(error_type, syslog.LOG_ERR)
-            self.rc_util.syslogout(error_value, syslog.LOG_ERR)
+            LOG.error(self.rc_util.msg_with_thread_id(error_type))
+            LOG.error(self.rc_util.msg_with_thread_id(error_value))
             for tb in tb_list:
-                self.rc_util.syslogout(tb, syslog.LOG_ERR)
+                LOG.error(self.rc_util.msg_with_thread_id(tb))
+
+        msg = ("END _skip_node_accident_vm_recovery: " \
+               "return %s" % (status))
+        LOG.debug(self.rc_util.msg_with_thread_id(msg))
 
         return status
 
     def _do_process_accident_vm_recovery(self, uuid, vm_state):
+        msg = ("BEGIN _do_process_accident_vm_recovery: " \
+               "parameters (uuid=%s, vm_state=%s)" \
+               % (uuid, vm_state))
+        LOG.debug(self.rc_util.msg_with_thread_id(msg))
 
         # Initalize status.
         status = self.STATUS_NORMAL
@@ -334,29 +373,33 @@ class RecoveryControllerWorker(object):
             self.rc_util_api.do_instance_start(uuid)
 
         except EnvironmentError:
-            self.rc_util.syslogout_ex("RecoveryControllerWorker_0020",
-                                      syslog.LOG_ERR)
             status = self.STATUS_ERROR
             error_type, error_value, traceback_ = sys.exc_info()
             tb_list = traceback.format_tb(traceback_)
-            self.rc_util.syslogout(error_type, syslog.LOG_ERR)
-            self.rc_util.syslogout(error_value, syslog.LOG_ERR)
+            LOG.error(self.rc_util.msg_with_thread_id(error_type))
+            LOG.error(self.rc_util.msg_with_thread_id(error_value))
             for tb in tb_list:
-                self.rc_util.syslogout(tb, syslog.LOG_ERR)
+                LOG.error(self.rc_util.msg_with_thread_id(tb))
         except:
-            self.rc_util.syslogout_ex("RecoveryControllerWorker_0021",
-                                      syslog.LOG_ERR)
             status = self.STATUS_ERROR
             error_type, error_value, traceback_ = sys.exc_info()
             tb_list = traceback.format_tb(traceback_)
-            self.rc_util.syslogout(error_type, syslog.LOG_ERR)
-            self.rc_util.syslogout(error_value, syslog.LOG_ERR)
+            LOG.error(self.rc_util.msg_with_thread_id(error_type))
+            LOG.error(self.rc_util.msg_with_thread_id(error_value))
             for tb in tb_list:
-                self.rc_util.syslogout(tb, syslog.LOG_ERR)
+                LOG.error(self.rc_util.msg_with_thread_id(tb))
+
+        msg = ("END _do_process_accident_vm_recovery: " \
+               "return %s" % (status))
+        LOG.debug(self.rc_util.msg_with_thread_id(msg))
 
         return status
 
     def _skip_process_accident_vm_recovery(self, uuid, vm_state):
+        msg = ("BEGIN _skip_process_accident_vm_recovery: " \
+               "parameters (uuid=%s, vm_state=%s)" \
+               % (uuid, vm_state))
+        LOG.debug(self.rc_util.msg_with_thread_id(msg))
 
         # Initalize status.
         status = self.STATUS_NORMAL
@@ -367,31 +410,30 @@ class RecoveryControllerWorker(object):
             # Call nova stop API.
             self.rc_util_api.do_instance_stop(uuid)
 
-            msg = "[RecoveryControllerWorker_0022]"
-            msg += ("Skipped recovery. instance_id:%s, "
+            msg = ("Skipped recovery. instance_id:%s, "
                     "accident type: [qemu process accident]." % uuid)
-            self.rc_util.syslogout(msg, syslog.LOG_INFO)
+            LOG.info(self.rc_util.msg_with_thread_id(msg))
 
         except EnvironmentError:
-            self.rc_util.syslogout_ex("RecoveryControllerWorker_0023",
-                                      syslog.LOG_ERR)
             status = self.STATUS_ERROR
             error_type, error_value, traceback_ = sys.exc_info()
             tb_list = traceback.format_tb(traceback_)
-            self.rc_util.syslogout(error_type, syslog.LOG_ERR)
-            self.rc_util.syslogout(error_value, syslog.LOG_ERR)
+            LOG.error(self.rc_util.msg_with_thread_id(error_type))
+            LOG.error(self.rc_util.msg_with_thread_id(error_value))
             for tb in tb_list:
-                self.rc_util.syslogout(tb, syslog.LOG_ERR)
+                LOG.error(self.rc_util.msg_with_thread_id(tb))
         except:
-            self.rc_util.syslogout_ex("RecoveryControllerWorker_0024",
-                                      syslog.LOG_ERR)
             status = self.STATUS_ERROR
             error_type, error_value, traceback_ = sys.exc_info()
             tb_list = traceback.format_tb(traceback_)
-            self.rc_util.syslogout(error_type, syslog.LOG_ERR)
-            self.rc_util.syslogout(error_value, syslog.LOG_ERR)
+            LOG.error(self.rc_util.msg_with_thread_id(error_type))
+            LOG.error(self.rc_util.msg_with_thread_id(error_value))
             for tb in tb_list:
-                self.rc_util.syslogout(tb, syslog.LOG_ERR)
+                LOG.error(self.rc_util.msg_with_thread_id(tb))
+
+        msg = ("END _skip_process_accident_vm_recovery: " \
+               "return %s" % (status))
+        LOG.debug(self.rc_util.msg_with_thread_id(msg))
 
         return status
 
@@ -403,6 +445,12 @@ class RecoveryControllerWorker(object):
            :param hostname: Host name of brocade target
         """
         try:
+            msg = ("BEGIN host_maintenance_mode: " \
+                   "parameters (notification_id=%s, hostname=%s, " \
+                   "update_progress=%s)" \
+                   % (notification_id, hostname, update_progress))
+            LOG.debug(self.rc_util.msg_with_thread_id(msg))
+
             db_engine = dbapi.get_engine()
             session = dbapi.get_session(db_engine)
             self.rc_util_api.disable_host_status(hostname)
@@ -412,25 +460,24 @@ class RecoveryControllerWorker(object):
                     session,
                     'progress', 2, notification_id)
 
+            msg = "END host_maintenance_mode"
+            LOG.debug(self.rc_util.msg_with_thread_id(msg))
+
         except KeyError:
-            self.rc_util.syslogout_ex("RecoveryControllerWorker_0031",
-                                      syslog.LOG_ERR)
             error_type, error_value, traceback_ = sys.exc_info()
             tb_list = traceback.format_tb(traceback_)
-            self.rc_util.syslogout(error_type, syslog.LOG_ERR)
-            self.rc_util.syslogout(error_value, syslog.LOG_ERR)
+            LOG.error(self.rc_util.msg_with_thread_id(error_type))
+            LOG.error(self.rc_util.msg_with_thread_id(error_value))
             for tb in tb_list:
-                self.rc_util.syslogout(tb, syslog.LOG_ERR)
+                LOG.error(self.rc_util.msg_with_thread_id(tb))
             return
         except:
-            self.rc_util.syslogout_ex("RecoveryControllerWorker_0032",
-                                      syslog.LOG_ERR)
             error_type, error_value, traceback_ = sys.exc_info()
             tb_list = traceback.format_tb(traceback_)
-            self.rc_util.syslogout(error_type, syslog.LOG_ERR)
-            self.rc_util.syslogout(error_value, syslog.LOG_ERR)
+            LOG.error(self.rc_util.msg_with_thread_id(error_type))
+            LOG.error(self.rc_util.msg_with_thread_id(error_value))
             for tb in tb_list:
-                self.rc_util.syslogout(tb, syslog.LOG_ERR)
+                LOG.error(self.rc_util.msg_with_thread_id(tb))
             return
 
     def recovery_instance(self, uuid, primary_id, sem):
@@ -441,6 +488,11 @@ class RecoveryControllerWorker(object):
            :param sem: Semaphore
         """
         try:
+            msg = ("BEGIN methodname: " \
+                   "parameters (uuid=%s, primary_id=%s, " \
+                   "sem=%s)" % (uuid, primary_id, sem))
+            LOG.debug(self.rc_util.msg_with_thread_id(msg))
+
             sem.acquire()
             db_engine = dbapi.get_engine()
             session = dbapi.get_session(db_engine)
@@ -478,37 +530,31 @@ class RecoveryControllerWorker(object):
                                             exe_param.get("recover_to"))
 
         except EnvironmentError:
-            self.rc_util.syslogout_ex("RecoveryControllerWorker_0034",
-                                      syslog.LOG_ERR)
             status = self.STATUS_ERROR
             error_type, error_value, traceback_ = sys.exc_info()
             tb_list = traceback.format_tb(traceback_)
-            self.rc_util.syslogout(error_type, syslog.LOG_ERR)
-            self.rc_util.syslogout(error_value, syslog.LOG_ERR)
+            LOG.error(self.rc_util.msg_with_thread_id(error_type))
+            LOG.error(self.rc_util.msg_with_thread_id(error_value))
             for tb in tb_list:
-                self.rc_util.syslogout(tb, syslog.LOG_ERR)
+                LOG.error(self.rc_util.msg_with_thread_id(tb))
             return
         except KeyError:
-            self.rc_util.syslogout_ex("RecoveryControllerWorker_0035",
-                                      syslog.LOG_ERR)
             status = self.STATUS_ERROR
             error_type, error_value, traceback_ = sys.exc_info()
             tb_list = traceback.format_tb(traceback_)
-            self.rc_util.syslogout(error_type, syslog.LOG_ERR)
-            self.rc_util.syslogout(error_value, syslog.LOG_ERR)
+            LOG.error(self.rc_util.msg_with_thread_id(error_type))
+            LOG.error(self.rc_util.msg_with_thread_id(error_value))
             for tb in tb_list:
-                self.rc_util.syslogout(tb, syslog.LOG_ERR)
+                LOG.error(self.rc_util.msg_with_thread_id(tb))
             return
         except:
-            self.rc_util.syslogout_ex("RecoveryControllerWorker_0037",
-                                      syslog.LOG_ERR)
             status = self.STATUS_ERROR
             error_type, error_value, traceback_ = sys.exc_info()
             tb_list = traceback.format_tb(traceback_)
-            self.rc_util.syslogout(error_type, syslog.LOG_ERR)
-            self.rc_util.syslogout(error_value, syslog.LOG_ERR)
+            LOG.error(self.rc_util.msg_with_thread_id(error_type))
+            LOG.error(self.rc_util.msg_with_thread_id(error_value))
             for tb in tb_list:
-                self.rc_util.syslogout(tb, syslog.LOG_ERR)
+                LOG.error(self.rc_util.msg_with_thread_id(tb))
             return
         finally:
             try:
@@ -517,21 +563,29 @@ class RecoveryControllerWorker(object):
                     self.rc_util_db.update_vm_list_db(
                         session, 'progress', 2, primary_id)
 
+                    msg = "Recovery process has been completed successfully."
+                    LOG.info(self.rc_util.msg_with_thread_id(msg))
+
                 # Abnormal termination.
                 else:
                     self.rc_util_db.update_vm_list_db(
                         session, 'progress', 3, primary_id)
 
+                    msg = "Recovery process has been terminated abnormally."
+                    LOG.info(self.rc_util.msg_with_thread_id(msg))
+
                 # Release semaphore
                 if sem:
                     sem.release()
+
+                msg = "END recovery_instance"
+                LOG.debug(self.rc_util.msg_with_thread_id(msg))
+
             except:
-                self.rc_util.syslogout_ex("RecoveryControllerWorker_0039",
-                                          syslog.LOG_ERR)
                 error_type, error_value, traceback_ = sys.exc_info()
                 tb_list = traceback.format_tb(traceback_)
-                self.rc_util.syslogout(error_type, syslog.LOG_ERR)
-                self.rc_util.syslogout(error_value, syslog.LOG_ERR)
+                LOG.error(self.rc_util.msg_with_thread_id(error_type))
+                LOG.error(self.rc_util.msg_with_thread_id(error_value))
                 for tb in tb_list:
-                    self.rc_util.syslogout(tb, syslog.LOG_ERR)
+                    LOG.error(self.rc_util.msg_with_thread_id(tb))
                 return
