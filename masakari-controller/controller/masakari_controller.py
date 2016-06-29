@@ -46,11 +46,13 @@ if parentdir not in sys.path:
 import controller.masakari_starter as starter
 from controller.masakari_util import RecoveryControllerUtil as util
 from controller.masakari_util import RecoveryControllerUtilDb as util_db
+from controller.masakari_util import LogProcessBeginAndEnd
 from oslo_log import log as oslo_logging
 import controller.masakari_config as config
 import controller.masakari_worker as worker
 import db.api as dbapi
 
+log_process_begin_and_end = LogProcessBeginAndEnd()
 LOG = oslo_logging.getLogger('controller.masakari_controller')
 
 class RecoveryController(object):
@@ -85,9 +87,6 @@ class RecoveryController(object):
                 self.rc_config)
             self.rc_util_db = util_db(self.rc_config)
             self.rc_worker = worker.RecoveryControllerWorker(self.rc_config)
-
-            msg = "END __init__"
-            LOG.debug(self.rc_util.msg_with_thread_id(msg))
 
         except Exception as e:
             logger = logging.getLogger()
@@ -127,7 +126,7 @@ class RecoveryController(object):
 
             sys.exit()
 
-
+    @log_process_begin_and_end.output_log
     def masakari(self):
         """
         RecoveryController class main processing:
@@ -137,10 +136,6 @@ class RecoveryController(object):
         Then, the processing starts the wsgi server and waits for the
         notification.
         """
-
-        msg = "BEGIN masakari"
-        LOG.debug(self.rc_util.msg_with_thread_id(msg))
-
         try:
             LOG.info(self.rc_util.msg_with_thread_id("masakari START."))
 
@@ -247,9 +242,6 @@ class RecoveryController(object):
                 eventlet.listen(('', int(conf_wsgi_dic['server_port']))),
                 self._notification_reciever)
 
-            msg = "END masakari"
-            LOG.debug(self.rc_util.msg_with_thread_id(msg))
-
         except exc.SQLAlchemyError:
             error_type, error_value, traceback_ = sys.exc_info()
             tb_list = traceback.format_tb(traceback_)
@@ -278,12 +270,9 @@ class RecoveryController(object):
 
             sys.exit()
 
+    @log_process_begin_and_end.output_log
     def _update_old_records_notification_list(self, session):
         # Get notification_expiration_sec from config
-
-        msg = ("BEGIN _update_old_records_notification_list: " \
-               "parameters (session=%s)" % (session))
-        LOG.debug(self.rc_util.msg_with_thread_id(msg))
 
         conf_dict = self.rc_config.get_value('recover_starter')
         notification_expiration_sec = int(conf_dict.get(
@@ -312,14 +301,8 @@ class RecoveryController(object):
             msg = "Succeeded in delete_expired_notification."
             LOG.info(self.rc_util.msg_with_thread_id(msg))
 
-        msg = "END _update_old_records_notification_list"
-        LOG.debug(self.rc_util.msg_with_thread_id(msg))
-
+    @log_process_begin_and_end.output_log
     def _find_reprocessing_records_notification_list(self, session):
-
-        msg = ("BEGIN _find_reprocessing_records_notification_list: " \
-               "parameters (session=%s)" % (session))
-        LOG.debug(self.rc_util.msg_with_thread_id(msg))
 
         return_value = []
         msg = "Do get_reprocessing_records_list_distinct."
@@ -383,17 +366,10 @@ class RecoveryController(object):
                     LOG.info(self.rc_util.msg_with_thread_id(msg))
                 row_cnt += 1
 
-        msg = ("END _find_reprocessing_records_notification_list: " \
-               "return %s" % (return_value))
-        LOG.debug(self.rc_util.msg_with_thread_id(msg))
-
         return return_value
 
+    @log_process_begin_and_end.output_log
     def _check_json_param(self, json_data):
-
-        msg = ("BEGIN _check_json_param: " \
-               "parameters (json_data=%s)" % (json_data))
-        LOG.debug(self.rc_util.msg_with_thread_id(msg))
 
         try:
             check_id = json_data["id"]
@@ -412,9 +388,6 @@ class RecoveryController(object):
             check_daylight = json_data["daylight"]
             check_cluster_port = json_data["cluster_port"]
 
-            msg = "END _check_json_param: return 0"
-            LOG.debug(self.rc_util.msg_with_thread_id(msg))
-
             return 0
         except KeyError:
             error_type, error_value, traceback_ = sys.exc_info()
@@ -424,16 +397,10 @@ class RecoveryController(object):
             for tb in tb_list:
                 LOG.error(self.rc_util.msg_with_thread_id(tb))
 
-            msg = "END _check_json_param: return 1"
-            LOG.debug(self.rc_util.msg_with_thread_id(msg))
-
             return 1
 
+    @log_process_begin_and_end.output_log
     def _notification_reciever(self, env, start_response):
-
-        msg = ("BEGIN _notification_reciever:" \
-               "parameters (env=%s, start_response=%s)"%(env,start_response))
-        LOG.debug(self.rc_util.msg_with_thread_id(msg))
 
         try:
             len = env['CONTENT_LENGTH']
@@ -454,9 +421,6 @@ class RecoveryController(object):
                           "status=400 Bad Request, " \
                           "body=method _notification_reciever returned."
                     LOG.info(self.rc_util.msg_with_thread_id(msg))
-
-                    msg = "END _notification_reciever: return"
-                    LOG.debug(self.rc_util.msg_with_thread_id(msg))
 
                     return ['method _notification_reciever returned.\r\n']
 
@@ -630,16 +594,10 @@ class RecoveryController(object):
                   "body=method _notification_reciever returned."
             LOG.info(self.rc_util.msg_with_thread_id(msg))
 
-        msg = "END _notification_reciever: return "
-        LOG.debug(self.rc_util.msg_with_thread_id(msg))
-
         return ['method _notification_reciever returned.\r\n']
 
+    @log_process_begin_and_end.output_log
     def _create_notification_list_db(self, jsonData):
-
-        msg = ("BEGIN _create_notification_list_db: " \
-               "parameters (jsonData=%s)"%(jsonData))
-        LOG.debug(self.rc_util.msg_with_thread_id(msg))
 
         ret_dic = {}
 
@@ -743,16 +701,10 @@ class RecoveryController(object):
                 LOG.error(self.rc_util.msg_with_thread_id(tb))
             raise
 
-        msg = ("END _create_notification_list_db: return %s"%(ret_dic))
-        LOG.debug(self.rc_util.msg_with_thread_id(msg))
-
         return ret_dic
 
+    @log_process_begin_and_end.output_log
     def _check_retry_notification(self, jsonData, session):
-
-        msg = ("BEGIN _check_retry_notification: " \
-               "parameters (jsonData=%s ,session=%s)"%(jsonData,session))
-        LOG.debug(self.rc_util.msg_with_thread_id(msg))
 
         notification_id = jsonData.get("id")
         msg = "Do get_all_notification_list_by_notification_id."
@@ -764,27 +716,13 @@ class RecoveryController(object):
         LOG.info(self.rc_util.msg_with_thread_id(msg))
         # if cnt is 0, not duplicate notification.
         if not cnt:
-
-            msg = "END _check_retry_notification: return 0"
-            LOG.debug(self.rc_util.msg_with_thread_id(msg))
-
             return 0
         else:
-
-            msg = "END _check_retry_notification: return 1"
-            LOG.debug(self.rc_util.msg_with_thread_id(msg))
-
             return 1
 
+    @log_process_begin_and_end.output_log
     def _check_repeated_notify(self, notification_time,
                                notification_hostname, session):
-
-        msg = ("BEGIN _check_repeated_notify: parameters" \
-               "(notification_time=%s, " \
-               "notification_hostname=%s, " \
-               "session=%s)" \
-               %(notification_time,notification_hostname,session))
-        LOG.debug(self.rc_util.msg_with_thread_id(msg))
 
         msg = "Do get_all_notification_list_by_hostname_type."
         LOG.info(self.rc_util.msg_with_thread_id(msg))
@@ -795,10 +733,6 @@ class RecoveryController(object):
 
         # if cnt is 0, not duplicate notification.
         if not result:
-
-            msg = "END _check_repeated_notify: return 0"
-            LOG.debug(self.rc_util.msg_with_thread_id(msg))
-
             return 0
 
         # result = cursor.fetchall()
@@ -815,9 +749,6 @@ class RecoveryController(object):
             if long(delta.total_seconds()) <= long(
                     notification_time_difference):
                 flg = 1
-
-        msg = ("END _check_repeated_notify: return %s"%(flg))
-        LOG.debug(self.rc_util.msg_with_thread_id(msg))
 
         return flg
 

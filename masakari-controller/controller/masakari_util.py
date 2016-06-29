@@ -55,6 +55,22 @@ from oslo_log import log as logging
 
 LOG = logging.getLogger(__name__)
 
+class LogProcessBeginAndEnd(object):
+    def output_log(self, func):
+        def _output_log(*args, **kwargs):
+            start_msg = ("BEGIN %s: parameters is %s, %s") % (func, args, kwargs)
+            LOG.debug(str(threading.current_thread()) + " " + start_msg)
+
+            ret = func(*args, **kwargs)
+
+            end_msg = ("END %s: return %s") % (func, ret)
+            LOG.debug(str(threading.current_thread()) + " " + end_msg)
+
+            return ret
+        return _output_log
+
+log_process_begin_and_end = LogProcessBeginAndEnd()
+
 class RecoveryControllerUtilDb(object):
 
     """
@@ -65,13 +81,7 @@ class RecoveryControllerUtilDb(object):
         self.rc_config = config_object
         self.rc_util = RecoveryControllerUtil(self.rc_config)
 
-        msg = ("BEGIN __init__: " \
-               "parameters (config_object=%s)" % (config_object))
-        LOG.debug(self.rc_util.msg_with_thread_id(msg))
-
-        msg = "END __init__"
-        LOG.debug(self.rc_util.msg_with_thread_id(msg))
-
+    @log_process_begin_and_end.output_log
     def insert_vm_list_db(self, session, notification_id,
                           notification_uuid, retry_cnt):
         """
@@ -87,13 +97,6 @@ class RecoveryControllerUtilDb(object):
         """
 
         try:
-            msg = ("BEGIN insert_vm_list_db: " \
-                   "parameters (session=%s, notification_id=%s, " \
-                   "notification_uuid=%s, retry_cnt=%s)" \
-                   % (session, notification_id, \
-                      notification_uuid, notification_uuid))
-            LOG.debug(self.rc_util.msg_with_thread_id(msg))
-
             msg = "Do get_all_notification_list_by_notification_id."
             LOG.info(self.rc_util.msg_with_thread_id(msg))
             res = dbapi.get_all_notification_list_by_notification_id(
@@ -124,10 +127,6 @@ class RecoveryControllerUtilDb(object):
             LOG.info(self.rc_util.msg_with_thread_id(msg))
 
             primary_id = vm_item.id
-
-            msg = ("END insert_vm_list_db: " \
-                   "return %s" % (primary_id))
-            LOG.debug(self.rc_util.msg_with_thread_id(msg))
 
             return primary_id
 
@@ -172,6 +171,7 @@ class RecoveryControllerUtilDb(object):
 
             raise
 
+    @log_process_begin_and_end.output_log
     def insert_notification_list_db(self, jsonData, recover_by, session):
         """
            Insert into notification_list DB from notification JSON.
@@ -187,12 +187,6 @@ class RecoveryControllerUtilDb(object):
         #       reference : The Notification Spec for RecoveryController.
         # JSON decoder perform null -> None translation
         try:
-            msg = ("BEGIN insert_notification_list_db: " \
-                   "parameters (jsonData=%s, recover_by=%s, " \
-                   "session=%s)" \
-                   % (jsonData, recover_by, session))
-            LOG.debug(self.rc_util.msg_with_thread_id(msg))
-
             if not jsonData.get("endTime"):
                 j_endTime = None
             else:
@@ -226,19 +220,11 @@ class RecoveryControllerUtilDb(object):
                 datetime format.
                 """
                 try:
-                    msg = ("BEGIN strp_time: " \
-                           "parameters (u_time=%s)" % (u_time))
-                    LOG.debug(self.rc_util.msg_with_thread_id(msg))
-
                     d = datetime.datetime.strptime(u_time, '%Y%m%d%H%M%S')
 
                 except (ValueError, TypeError) as e:
                     LOG.warning(self.rc_util.msg_with_thread_id(e))
                     d = None
-
-                msg = ("END strp_time: " \
-                       "return %s" % (d))
-                LOG.debug(self.rc_util.msg_with_thread_id(msg))
 
                 return d
 
@@ -339,10 +325,6 @@ class RecoveryControllerUtilDb(object):
                 "recover_to": recover_to
             }
 
-            msg = ("END insert_notification_list_db: " \
-                   "return %s" % (ret_dic))
-            LOG.debug(self.rc_util.msg_with_thread_id(msg))
-
             return ret_dic
 
         except Exception as e:
@@ -358,6 +340,7 @@ class RecoveryControllerUtilDb(object):
 
             raise e
 
+    @log_process_begin_and_end.output_log
     def _get_reserve_node_from_reserve_list_db(self,
                                                cluster_port,
                                                notification_hostname,
@@ -373,12 +356,6 @@ class RecoveryControllerUtilDb(object):
         """
 
         try:
-            msg = ("BEGIN _get_reserve_node_from_reserve_list_db: " \
-                   "parameters (cluster_port=%s, " \
-                   "notification_hostname=%s, session=%s)" \
-                   % (cluster_port, notification_hostname, session))
-            LOG.debug(self.rc_util.msg_with_thread_id(msg))
-
             # Todo(sampath): write the test codes
             #                Check it
             msg = "Do get_one_reserve_list_by_cluster_port_for_update."
@@ -412,12 +389,9 @@ class RecoveryControllerUtilDb(object):
 
             raise e
 
-        msg = ("END _get_reserve_node_from_reserve_list_db: " \
-               "return %s" % (hostname))
-        LOG.debug(self.rc_util.msg_with_thread_id(msg))
-
         return hostname
 
+    @log_process_begin_and_end.output_log
     def update_notification_list_db(self, session, key, value,
                                     notification_id):
         """
@@ -428,12 +402,6 @@ class RecoveryControllerUtilDb(object):
                 (updated narrowing condition of notification list table)
         """
         try:
-            msg = ("BEGIN update_notification_list_db: " \
-                   "parameters (session=%s, key=%s, " \
-                   "value=%s, notification_id=%s)" \
-                   % (session, key, value, notification_id))
-            LOG.debug(self.rc_util.msg_with_thread_id(msg))
-
             # Update progress with update_at and delete_at
             now = datetime.datetime.now()
             update_val = {'update_at': now}
@@ -452,9 +420,6 @@ class RecoveryControllerUtilDb(object):
                 session, notification_id, update_val)
             msg = "Succeeded in update_notification_list_dict."
             LOG.info(self.rc_util.msg_with_thread_id(msg))
-
-            msg = "END update_notification_list_db"
-            LOG.debug(self.rc_util.msg_with_thread_id(msg))
 
         except AttributeError:
             error_type, error_value, traceback_ = sys.exc_info()
@@ -498,6 +463,7 @@ class RecoveryControllerUtilDb(object):
 
             raise KeyError
 
+    @log_process_begin_and_end.output_log
     def update_vm_list_db(self,  session, key, value, primary_id):
         """
         VM list table update
@@ -507,12 +473,6 @@ class RecoveryControllerUtilDb(object):
         """
 
         try:
-            msg = ("BEGIN update_vm_list_db: " \
-                   "parameters (session=%s, key=%s, " \
-                   "value=%s, primary_id=%s)" \
-                   % (session, key, value, primary_id))
-            LOG.debug(self.rc_util.msg_with_thread_id(msg))
-
             # Updated progress to start
             now = datetime.datetime.now()
             update_val = {}
@@ -535,9 +495,6 @@ class RecoveryControllerUtilDb(object):
             dbapi.update_vm_list_by_id_dict(session, primary_id, update_val)
             msg = "Succeeded in update_vm_list_by_id_dict."
             LOG.info(self.rc_util.msg_with_thread_id(msg))
-
-            msg = "END update_vm_list_db"
-            LOG.debug(self.rc_util.msg_with_thread_id(msg))
 
         except AttributeError:
             error_type, error_value, traceback_ = sys.exc_info()
@@ -595,10 +552,6 @@ class RecoveryControllerUtilApi(object):
         self.rc_config = config_object
         self.rc_util = RecoveryControllerUtil(self.rc_config)
 
-        msg = ("BEGIN __init__: " \
-               "parameters (config_object=%s)" % (config_object))
-        LOG.debug(self.rc_util.msg_with_thread_id(msg))
-
         project_id = self._fetch_project_id()
         auth_args = {
             'auth_url': self.rc_config.conf_nova['auth_url'],
@@ -619,28 +572,17 @@ class RecoveryControllerUtilApi(object):
                                               connect_retries=api_retries,
                                               logger=LOG.logger)
 
-        msg = "END __init__"
-        LOG.debug(self.rc_util.msg_with_thread_id(msg))
-
+    @log_process_begin_and_end.output_log
     def _get_session(self, auth_args):
-        msg = ("BEGIN _get_session: " \
-               "parameters (auth_args=%s)" % (auth_args))
-        LOG.debug(self.rc_util.msg_with_thread_id(msg))
-
         """ Return Keystone API session object."""
         loader = loading.get_plugin_loader('password')
         auth = loader.load_from_options(**auth_args)
         sess = session.Session(auth=auth)
 
-        msg = ("END _get_session: " \
-               "return %s" % (sess))
-        LOG.debug(self.rc_util.msg_with_thread_id(msg))
         return sess
 
+    @log_process_begin_and_end.output_log
     def _fetch_project_id(self):
-        msg = "BEGIN methodname"
-        LOG.debug(self.rc_util.msg_with_thread_id(msg))
-
         auth_args = {
             'auth_url': self.rc_config.conf_nova['auth_url'],
             'username': self.rc_config.conf_nova['admin_user'],
@@ -662,12 +604,9 @@ class RecoveryControllerUtilApi(object):
                    % self.rc_config.conf_nova['project_name'])
             raise KeyError(msg)
 
-        msg = ("END _fetch_project_id: " \
-               "return %s" % (projects[0].id))
-        LOG.debug(self.rc_util.msg_with_thread_id(msg))
-
         return projects[0].id
 
+    @log_process_begin_and_end.output_log
     def do_instance_show(self, uuid):
         """Returns Server Intance.
 
@@ -675,10 +614,6 @@ class RecoveryControllerUtilApi(object):
         :return : Server instance
         """
         try:
-            msg = ("BEGIN do_instance_show: " \
-                   "parameters (uuid=%s)" % (uuid))
-            LOG.debug(self.rc_util.msg_with_thread_id(msg))
-
             msg = ('Call Server Details API with %s' % uuid)
             LOG.info(self.rc_util.msg_with_thread_id(msg))
             server = self.nova_client.servers.get(uuid)
@@ -689,12 +624,9 @@ class RecoveryControllerUtilApi(object):
 
             raise
 
-        msg = ("END do_instance_show: " \
-               "return %s" % (server))
-        LOG.debug(self.rc_util.msg_with_thread_id(msg))
-
         return server
 
+    @log_process_begin_and_end.output_log
     def do_instance_stop(self, uuid):
         """Call Nova instance stop API.
 
@@ -702,16 +634,9 @@ class RecoveryControllerUtilApi(object):
         :return : None if succeed
         """
         try:
-            msg = ("BEGIN do_instance_stop: " \
-                   "parameters (uuid=%s)" % (uuid))
-            LOG.debug(self.rc_util.msg_with_thread_id(msg))
-
             msg = ('Call Stop API with %s' % uuid)
             LOG.info(self.rc_util.msg_with_thread_id(msg))
             self.nova_client.servers.stop(uuid)
-
-            msg = "END do_instance_stop"
-            LOG.debug(self.rc_util.msg_with_thread_id(msg))
 
         except exceptions.Conflict as e:
             msg = "Server instance %s is already in stopped." % uuid
@@ -724,6 +649,7 @@ class RecoveryControllerUtilApi(object):
             LOG.error(self.rc_util.msg_with_thread_id(msg))
             raise
 
+    @log_process_begin_and_end.output_log
     def do_instance_start(self, uuid):
         """Call Nova instance start API.
 
@@ -731,16 +657,9 @@ class RecoveryControllerUtilApi(object):
         :return : None if succeed
         """
         try:
-            msg = ("BEGIN do_instance_start: " \
-                   "parameters (uuid=%s)" % (uuid))
-            LOG.debug(self.rc_util.msg_with_thread_id(msg))
-
             msg = ('Call Start API with %s' % uuid)
             LOG.info(self.rc_util.msg_with_thread_id(msg))
             self.nova_client.servers.start(uuid)
-
-            msg = "END do_instance_start"
-            LOG.debug(self.rc_util.msg_with_thread_id(msg))
 
         except exceptions.Conflict as e:
             msg = "Server instance %s is already in active." % uuid
@@ -753,6 +672,7 @@ class RecoveryControllerUtilApi(object):
             LOG.error(self.rc_util.msg_with_thread_id(msg))
             raise
 
+    @log_process_begin_and_end.output_log
     def do_instance_reset(self, uuid, status):
         """ Call Nova reset state API.
 
@@ -760,34 +680,23 @@ class RecoveryControllerUtilApi(object):
         :status : Status reset to
         """
         try:
-            msg = ("BEGIN do_instance_reset: " \
-                   "parameters (uuid=%s, status=%s)" \
-                   % (uuid, status))
-            LOG.debug(self.rc_util.msg_with_thread_id(msg))
-
             msg = ('Call Reset State API with %s to %s' %
                                    (uuid, status))
             LOG.info(self.rc_util.msg_with_thread_id(msg))
             self.nova_client.servers.reset_state(uuid, status)
-
-            msg = "END do_instance_reset"
-            LOG.debug(self.rc_util.msg_with_thread_id(msg))
 
         except exceptions.ClientException as e:
             msg = 'Fails to call Nova Server Reset State API: %s' % e
             LOG.error(self.rc_util.msg_with_thread_id(msg))
             raise EnvironmentError(msg)
 
+    @log_process_begin_and_end.output_log
     def fetch_servers_on_hypervisor(self, hypervisor):
         """Fetch server instance list on the hypervisor.
 
         :hypervisor : hypervisor's hostname
         :return : A list of servers
         """
-        msg = ("BEGIN fetch_servers_on_hypervisor: " \
-               "parameters (hypervisor=%s)" % (hypervisor))
-        LOG.debug(self.rc_util.msg_with_thread_id(msg))
-
         opts = {
             'host': hypervisor,
             'all_tenants': True,
@@ -798,10 +707,6 @@ class RecoveryControllerUtilApi(object):
             servers = self.nova_client.servers.list(detailed=False,
                                                     search_opts=opts)
 
-            msg = ("END fetch_servers_on_hypervisor: " \
-                   "return %s" % ([s.id for s in servers]))
-            LOG.debug(self.rc_util.msg_with_thread_id(msg))
-
             return [s.id for s in servers]
 
         except exceptions.ClientException as e:
@@ -809,28 +714,23 @@ class RecoveryControllerUtilApi(object):
             LOG.error(self.rc_util.msg_with_thread_id(msg))
             raise
 
+    @log_process_begin_and_end.output_log
     def disable_host_status(self, hostname):
         """Disable host' status.
 
         :hostname: Target host name
         """
         try:
-            msg = ("BEGIN disable_host_status: " \
-                   "parameters (hostname=%s)" % (hostname))
-            LOG.debug(self.rc_util.msg_with_thread_id(msg))
-
             msg = ('Disable nova-compute on %s' % hostname)
             LOG.info(self.rc_util.msg_with_thread_id(msg))
             self.nova_client.services.disable(hostname, 'nova-compute')
-
-            msg = "END disable_host_status"
-            LOG.debug(self.rc_util.msg_with_thread_id(msg))
 
         except exceptions.ClientException as e:
             msg = 'Fails to disable nova-compute on %s: %s' % (hostname, e)
             LOG.error(self.rc_util.msg_with_thread_id(msg))
             raise
 
+    @log_process_begin_and_end.output_log
     def do_instance_evacuate(self, uuid, targethost):
         """Call evacuate API for server instance.
 
@@ -838,18 +738,11 @@ class RecoveryControllerUtilApi(object):
         :targethost: The name or ID of the host where the server is evacuated.
         """
         try:
-            msg = ("BEGIN do_instance_evacuate: " \
-                   "parameters (uuid=%s, targethost=%s)" \
-                   % (uuid, targethost))
-            LOG.debug(self.rc_util.msg_with_thread_id(msg))
-
             msg = ('Call Evacuate API with %s to %s' %
                                    (uuid, targethost))
             LOG.info(self.rc_util.msg_with_thread_id(msg))
             self.nova_client.servers.evacuate(uuid, host=targethost,
                                               on_shared_storage=True)
-            msg = "END do_instance_evacuate"
-            LOG.debug(self.rc_util.msg_with_thread_id(msg))
 
         except exceptions.ClientException as e:
             msg = ('Fails to call Instance Evacuate API onto %s: %s'
@@ -864,14 +757,7 @@ class RecoveryControllerUtil(object):
     """
 
     def __init__(self, config_object):
-        msg = ("BEGIN __init__: " \
-               "parameters (config_object=%s)" % (config_object))
-        LOG.debug(self.msg_with_thread_id(msg))
-
         self.rc_config = config_object
-
-        msg = "END __init__"
-        LOG.debug(self.msg_with_thread_id(msg))
 
     def msg_with_thread_id(self, rawmsg):
         """
@@ -879,14 +765,5 @@ class RecoveryControllerUtil(object):
         :rawmsg : message.
         :return : message with thread id.
         """
-        logmsg = ("BEGIN msg_with_thread_id: " \
-                  "parameters (rawmsg=%s)" % (rawmsg))
-        LOG.debug(str(threading.current_thread()) + " " + logmsg)
-
         msg = str(threading.current_thread()) + " " + str(rawmsg)
-
-        logmsg = ("END msg_with_thread_id: " \
-                  "return %s" % (msg))
-        LOG.debug(str(threading.current_thread()) + " " + logmsg)
-
         return msg

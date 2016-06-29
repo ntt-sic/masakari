@@ -39,6 +39,7 @@ if parentdir not in sys.path:
 import db.api as dbapi
 from oslo_log import log as logging
 
+log_process_begin_and_end = util.LogProcessBeginAndEnd()
 LOG = logging.getLogger(__name__)
 
 class RecoveryControllerWorker(object):
@@ -51,11 +52,6 @@ class RecoveryControllerWorker(object):
     def __init__(self, config_object):
         self.rc_config = config_object
         self.rc_util = util.RecoveryControllerUtil(self.rc_config)
-
-        msg = ("BEGIN __init__: " \
-               "parameters (config_object=%s)" % (config_object))
-        LOG.debug(self.rc_util.msg_with_thread_id(msg))
-
         self.rc_util_db = util.RecoveryControllerUtilDb(self.rc_config)
         self.rc_util_api = util.RecoveryControllerUtilApi(self.rc_config)
 
@@ -64,16 +60,10 @@ class RecoveryControllerWorker(object):
 
 #        self.WAIT_SYNC_TIME_SEC = 60
 
-        msg = "END __init__"
-        LOG.debug(self.rc_util.msg_with_thread_id(msg))
-
+    @log_process_begin_and_end.output_log
     def _get_vm_param(self, uuid):
 
         try:
-            msg = ("BEGIN _get_vm_param: " \
-                   "parameters (uuid=%s)" % (uuid))
-            LOG.debug(self.rc_util.msg_with_thread_id(msg))
-
             # Initalize return values.
             conf_dic = self.rc_config.get_value('recover_starter')
             api_max_retry_cnt = conf_dic.get('api_max_retry_cnt')
@@ -83,11 +73,6 @@ class RecoveryControllerWorker(object):
                 try:
                     # Call nova show API.
                     server = self.rc_util_api.do_instance_show(uuid)
-
-                    msg = ("END _get_vm_param: " \
-                           "return %s" % (server))
-                    LOG.debug(self.rc_util.msg_with_thread_id(msg))
-
                     return server
                 except Exception:
                     if cnt == int(api_max_retry_cnt):
@@ -97,9 +82,6 @@ class RecoveryControllerWorker(object):
                         LOG.info(self.rc_util.msg_with_thread_id(msg))
                         greenthread.sleep(int(api_retry_interval))
                         cnt += 1
-
-            msg = "END _get_vm_param"
-            LOG.debug(self.rc_util.msg_with_thread_id(msg))
 
         except EnvironmentError:
             error_type, error_value, traceback_ = sys.exc_info()
@@ -126,14 +108,10 @@ class RecoveryControllerWorker(object):
                 LOG.error(self.rc_util.msg_with_thread_id(tb))
             raise
 
+    @log_process_begin_and_end.output_log
     def _get_vmha_param(self, session, uuid, primary_id):
         # TODO(sampath): remove unused 'uuid' form args
         try:
-            msg = ("BEGIN _get_vmha_param: " \
-                   "parameters (session=%s, uuid=%s, primary_id=%s)" \
-                % (session, uuid, primary_id))
-            LOG.debug(self.rc_util.msg_with_thread_id(msg))
-
             msg = "Do get_vm_list_by_id."
             LOG.info(self.rc_util.msg_with_thread_id(msg))
             recover_data = dbapi.get_vm_list_by_id(session, primary_id)
@@ -173,22 +151,11 @@ class RecoveryControllerWorker(object):
                 LOG.error(self.rc_util.msg_with_thread_id(tb))
             raise
 
-        msg = ("END _get_vmha_param: " \
-               "return %s, %s" % (recover_by, recover_to))
-        LOG.debug(self.rc_util.msg_with_thread_id(msg))
-
         return recover_by, recover_to
 
+    @log_process_begin_and_end.output_log
     def _execute_recovery(self, session, uuid, vm_state, HA_Enabled,
                           recover_by, recover_to):
-
-        msg = ("BEGIN _execute_recovery: " \
-               "parameters (session=%s, uuid=%s, " \
-               "vm_state=%s, HA_Enabled=%s" \
-               "recover_by=%s, recover_to=%s)" \
-               % (session, uuid, vm_state, HA_Enabled, \
-                  recover_by, recover_to))
-        LOG.debug(self.rc_util.msg_with_thread_id(msg))
 
         # Initalize status.
         res = self.STATUS_NORMAL
@@ -224,20 +191,12 @@ class RecoveryControllerWorker(object):
                 res = self._skip_process_accident_vm_recovery(
                     uuid, vm_state)
 
-        msg = ("END _execute_recovery: " \
-               "return %s" % (res))
-        LOG.debug(self.rc_util.msg_with_thread_id(msg))
-
         return res
 
+    @log_process_begin_and_end.output_log
     def _do_node_accident_vm_recovery(self, uuid, vm_state, evacuate_node):
 
         try:
-            msg = ("BEGIN _do_node_accident_vm_recovery: " \
-                   "parameters (uuid=%s, vm_state=%s, evacuate_node=%s)" \
-                   % (uuid, vm_state, evacuate_node))
-            LOG.debug(self.rc_util.msg_with_thread_id(msg))
-
             # Initalize status.
             status = self.STATUS_NORMAL
 
@@ -282,18 +241,10 @@ class RecoveryControllerWorker(object):
             for tb in tb_list:
                 LOG.error(self.rc_util.msg_with_thread_id(tb))
 
-        msg = ("END _do_node_accident_vm_recovery: " \
-               "return %s" % (status))
-        LOG.debug(self.rc_util.msg_with_thread_id(msg))
-
         return status
 
+    @log_process_begin_and_end.output_log
     def _skip_node_accident_vm_recovery(self, uuid, vm_state):
-        msg = ("BEGIN _skip_node_accident_vm_recovery: " \
-               "parameters (uuid=%s, vm_state=%s)" \
-               % (uuid, vm_state))
-        LOG.debug(self.rc_util.msg_with_thread_id(msg))
-
         # Initalize status.
         status = self.STATUS_NORMAL
 
@@ -322,18 +273,10 @@ class RecoveryControllerWorker(object):
             for tb in tb_list:
                 LOG.error(self.rc_util.msg_with_thread_id(tb))
 
-        msg = ("END _skip_node_accident_vm_recovery: " \
-               "return %s" % (status))
-        LOG.debug(self.rc_util.msg_with_thread_id(msg))
-
         return status
 
+    @log_process_begin_and_end.output_log
     def _do_process_accident_vm_recovery(self, uuid, vm_state):
-        msg = ("BEGIN _do_process_accident_vm_recovery: " \
-               "parameters (uuid=%s, vm_state=%s)" \
-               % (uuid, vm_state))
-        LOG.debug(self.rc_util.msg_with_thread_id(msg))
-
         # Initalize status.
         status = self.STATUS_NORMAL
 
@@ -389,18 +332,10 @@ class RecoveryControllerWorker(object):
             for tb in tb_list:
                 LOG.error(self.rc_util.msg_with_thread_id(tb))
 
-        msg = ("END _do_process_accident_vm_recovery: " \
-               "return %s" % (status))
-        LOG.debug(self.rc_util.msg_with_thread_id(msg))
-
         return status
 
+    @log_process_begin_and_end.output_log
     def _skip_process_accident_vm_recovery(self, uuid, vm_state):
-        msg = ("BEGIN _skip_process_accident_vm_recovery: " \
-               "parameters (uuid=%s, vm_state=%s)" \
-               % (uuid, vm_state))
-        LOG.debug(self.rc_util.msg_with_thread_id(msg))
-
         # Initalize status.
         status = self.STATUS_NORMAL
 
@@ -431,12 +366,9 @@ class RecoveryControllerWorker(object):
             for tb in tb_list:
                 LOG.error(self.rc_util.msg_with_thread_id(tb))
 
-        msg = ("END _skip_process_accident_vm_recovery: " \
-               "return %s" % (status))
-        LOG.debug(self.rc_util.msg_with_thread_id(msg))
-
         return status
 
+    @log_process_begin_and_end.output_log
     def host_maintenance_mode(self, notification_id, hostname,
                               update_progress):
         """
@@ -445,12 +377,6 @@ class RecoveryControllerWorker(object):
            :param hostname: Host name of brocade target
         """
         try:
-            msg = ("BEGIN host_maintenance_mode: " \
-                   "parameters (notification_id=%s, hostname=%s, " \
-                   "update_progress=%s)" \
-                   % (notification_id, hostname, update_progress))
-            LOG.debug(self.rc_util.msg_with_thread_id(msg))
-
             db_engine = dbapi.get_engine()
             session = dbapi.get_session(db_engine)
             self.rc_util_api.disable_host_status(hostname)
@@ -459,9 +385,6 @@ class RecoveryControllerWorker(object):
                 self.rc_util_db.update_notification_list_db(
                     session,
                     'progress', 2, notification_id)
-
-            msg = "END host_maintenance_mode"
-            LOG.debug(self.rc_util.msg_with_thread_id(msg))
 
         except KeyError:
             error_type, error_value, traceback_ = sys.exc_info()
@@ -480,6 +403,7 @@ class RecoveryControllerWorker(object):
                 LOG.error(self.rc_util.msg_with_thread_id(tb))
             return
 
+    @log_process_begin_and_end.output_log
     def recovery_instance(self, uuid, primary_id, sem):
         """
            Execute VM recovery.
@@ -488,11 +412,6 @@ class RecoveryControllerWorker(object):
            :param sem: Semaphore
         """
         try:
-            msg = ("BEGIN methodname: " \
-                   "parameters (uuid=%s, primary_id=%s, " \
-                   "sem=%s)" % (uuid, primary_id, sem))
-            LOG.debug(self.rc_util.msg_with_thread_id(msg))
-
             sem.acquire()
             db_engine = dbapi.get_engine()
             session = dbapi.get_session(db_engine)
@@ -577,9 +496,6 @@ class RecoveryControllerWorker(object):
                 # Release semaphore
                 if sem:
                     sem.release()
-
-                msg = "END recovery_instance"
-                LOG.debug(self.rc_util.msg_with_thread_id(msg))
 
             except:
                 error_type, error_value, traceback_ = sys.exc_info()

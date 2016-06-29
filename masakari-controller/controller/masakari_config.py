@@ -50,11 +50,7 @@ class RecoveryControllerConfig(object):
 
         self._get_option(config_path)
 
-        msg = "END __init__"
-        LOG.debug(str(threading.current_thread()) + " " + msg)
-
     def _get_option(self, config_file_path):
-
         inifile = ConfigParser.SafeConfigParser()
         inifile.read(config_file_path)
 
@@ -88,31 +84,15 @@ class RecoveryControllerConfig(object):
         # insert conf_nova dictionary
         self.conf_nova = self._set_nova_section(inifile)
 
-        msg = ("END _get_option: " \
-               "return %d" % 0)
-        LOG.debug(str(threading.current_thread()) + " " + msg)
-
         return 0
 
     def _set_wsgi_section(self, inifile):
-        msg = ("BEGIN _set_wsgi_section: " \
-               "parameters (inifile=%s)" % (inifile))
-        LOG.debug(str(threading.current_thread()) + " " + msg)
-
         conf_wsgi = {}
         conf_wsgi['server_port'] = inifile.get('wsgi', 'server_port')
-
-        msg = ("END _set_wsgi_section: " \
-               "return %s" % (conf_wsgi))
-        LOG.debug(str(threading.current_thread()) + " " + msg)
 
         return conf_wsgi
 
     def _set_db_section(self, inifile):
-        msg = ("BEGIN _set_db_section: " \
-               "parameters (inifile=%s)" % (inifile))
-        LOG.debug(str(threading.current_thread()) + " " + msg)
-
         conf_db = {}
         conf_db['drivername'] = inifile.get('db', 'drivername')
         conf_db['host'] = inifile.get('db', 'host')
@@ -125,17 +105,9 @@ class RecoveryControllerConfig(object):
         conf_db['innodb_lock_wait_timeout'] = \
             inifile.get('db', 'innodb_lock_wait_timeout')
 
-        msg = ("END _set_db_section: " \
-               "return %s" % (conf_db))
-        LOG.debug(str(threading.current_thread()) + " " + msg)
-
         return conf_db
 
     def _set_recover_starter_section(self, inifile):
-        msg = ("BEGIN _set_recover_starter_section: " \
-               "parameters (inifile=%s)" % (inifile))
-        LOG.debug(str(threading.current_thread()) + " " + msg)
-
         conf_recover_starter = {}
         conf_recover_starter['interval_to_be_retry'] = inifile.get(
             'recover_starter', 'interval_to_be_retry')
@@ -166,27 +138,15 @@ class RecoveryControllerConfig(object):
         conf_recover_starter['notification_expiration_sec'] = \
             inifile.get('recover_starter', 'notification_expiration_sec')
 
-        msg = ("END _set_recover_starter_section: " \
-               "return %s" % (conf_recover_starter))
-        LOG.debug(str(threading.current_thread()) + " " + msg)
-
         return conf_recover_starter
 
     def _set_nova_section(self, inifile):
-        msg = ("BEGIN _set_nova_section: " \
-               "parameters (inifile=%s)" % (inifile))
-        LOG.debug(str(threading.current_thread()) + " " + msg)
-
         conf_nova = {}
         conf_nova['domain'] = inifile.get('nova', 'domain')
         conf_nova['admin_user'] = inifile.get('nova', 'admin_user')
         conf_nova['admin_password'] = inifile.get('nova', 'admin_password')
         conf_nova['auth_url'] = inifile.get('nova', 'auth_url')
         conf_nova['project_name'] = inifile.get('nova', 'project_name')
-
-        msg = ("END _set_nova_section: " \
-               "return %s" % (conf_nova))
-        LOG.debug(str(threading.current_thread()) + " " + msg)
 
         return conf_nova
 
@@ -199,34 +159,18 @@ class RecoveryControllerConfig(object):
         :returns dict: The value that is set for the specified section in the
          argument.
         """
-        msg = ("BEGIN get_value: " \
-               "parameters (section=%s)" % (section))
-        LOG.debug(str(threading.current_thread()) + " " + msg)
-
         if section == 'wsgi':
-            msg = ("END get_value: return %s") % self.conf_wsgi
-            LOG.debug(str(threading.current_thread()) + " " + msg)
             return self.conf_wsgi
         elif section == 'db':
-            msg = ("END get_value: return %s") % self.conf_db
-            LOG.debug(str(threading.current_thread()) + " " + msg)
             return self.conf_db
         elif section == 'log':
-            msg = ("END get_value: return %s") % self.conf_log
-            LOG.debug(str(threading.current_thread()) + " " + msg)
             return self.conf_log
         elif section == 'recover_starter':
-            msg = ("END get_value: return %s") % self.conf_recover_starter
-            LOG.debug(str(threading.current_thread()) + " " + msg)
             return self.conf_recover_starter
         elif section == 'nova':
-            msg = ("END get_value: return %s") % self.conf_nova
-            LOG.debug(str(threading.current_thread()) + " " + msg)
             return self.conf_nova
         else:
             dicNull = {}
-            msg = ("END get_value: return %s") % dicNull
-            LOG.debug(str(threading.current_thread()) + " " + msg)
             return dicNull
 
     def _log_setup(self):
@@ -256,8 +200,5 @@ class RecoveryControllerConfig(object):
                 pass
             else:
                 raise
-
-        msg = "END _log_setup"
-        LOG.debug(str(threading.current_thread()) + " " + msg)
 
         return
