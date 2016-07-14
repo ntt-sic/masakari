@@ -42,9 +42,9 @@ from sqlalchemy import exc
 
 parentdir = os.path.abspath(os.path.join(os.path.dirname(__file__),
                                          os.path.pardir))
-# # rootdir = os.path.abspath(os.path.join(parentdir, os.path.pardir))
-# # project root directory needs to be add at list head rather than tail
-# # this file named 'masakari' conflicts to the directory name
+# rootdir = os.path.abspath(os.path.join(parentdir, os.path.pardir))
+# project root directory needs to be add at list head rather than tail
+# this file named 'masakari' conflicts to the directory name
 if parentdir not in sys.path:
     sys.path = [parentdir] + sys.path
 
@@ -52,24 +52,33 @@ import db.api as dbapi
 from db.models import NotificationList, VmList, ReserveList
 
 from oslo_log import log as logging
+from functools import wraps
 
 LOG = logging.getLogger(__name__)
 
+
 class LogProcessBeginAndEnd(object):
+
+    def __init__(self, logger):
+        self.LOG = logger
+
     def output_log(self, func):
+        @wraps(func)
         def _output_log(*args, **kwargs):
-            start_msg = ("BEGIN %s: parameters is %s, %s") % (func, args, kwargs)
-            LOG.debug(str(threading.current_thread()) + " " + start_msg)
+            start_msg = ("BEGIN %s: parameters are %s, %s") % (
+                func.__name__, args, kwargs)
+            self.LOG.debug(start_msg)
 
             ret = func(*args, **kwargs)
 
-            end_msg = ("END %s: return %s") % (func, ret)
-            LOG.debug(str(threading.current_thread()) + " " + end_msg)
+            end_msg = ("END %s: return %s") % (func.__name__, ret)
+            self.LOG.debug(end_msg)
 
             return ret
         return _output_log
 
-log_process_begin_and_end = LogProcessBeginAndEnd()
+log_process_begin_and_end = LogProcessBeginAndEnd(LOG)
+
 
 class RecoveryControllerUtilDb(object):
 
@@ -79,7 +88,6 @@ class RecoveryControllerUtilDb(object):
 
     def __init__(self, config_object):
         self.rc_config = config_object
-        self.rc_util = RecoveryControllerUtil(self.rc_config)
 
     @log_process_begin_and_end.output_log
     def insert_vm_list_db(self, session, notification_id,
@@ -98,20 +106,20 @@ class RecoveryControllerUtilDb(object):
 
         try:
             msg = "Do get_all_notification_list_by_notification_id."
-            LOG.info(self.rc_util.msg_with_thread_id(msg))
+            LOG.info(msg)
             res = dbapi.get_all_notification_list_by_notification_id(
                 session,
                 notification_id
             )
             msg = "Succeeded in get_all_notification_list_by_notification_id. " \
                 + "Return_value = " + str(res)
-            LOG.info(self.rc_util.msg_with_thread_id(msg))
+            LOG.info(msg)
             # Todo(sampath): select first and only object from the list
             # log if many records
             notification_recover_to = res[0].recover_to
             notification_recover_by = res[0].recover_by
             msg = "Do add_vm_list."
-            LOG.info(self.rc_util.msg_with_thread_id(msg))
+            LOG.info(msg)
             vm_item = dbapi.add_vm_list(session,
                                         datetime.datetime.now(),
                                         "0",
@@ -124,7 +132,7 @@ class RecoveryControllerUtilDb(object):
                                         )
             msg = "Succeeded in add_vm_list. " \
                 + "Return_value = " + str(vm_item)
-            LOG.info(self.rc_util.msg_with_thread_id(msg))
+            LOG.info(msg)
 
             primary_id = vm_item.id
 
@@ -134,40 +142,40 @@ class RecoveryControllerUtilDb(object):
 
             error_type, error_value, traceback_ = sys.exc_info()
             tb_list = traceback.format_tb(traceback_)
-            LOG.error(self.rc_util.msg_with_thread_id(error_type))
-            LOG.error(self.rc_util.msg_with_thread_id(error_value))
+            LOG.error(error_type)
+            LOG.error(error_value)
             for tb in tb_list:
-                LOG.error(self.rc_util.msg_with_thread_id(tb))
+                LOG.error(tb)
 
             msg = "Exception : KeyError in insert_vm_list_db()."
-            LOG.error(self.rc_util.msg_with_thread_id(msg))
+            LOG.error(msg)
 
             raise KeyError
 
         except exc.SQLAlchemyError:
             error_type, error_value, traceback_ = sys.exc_info()
             tb_list = traceback.format_tb(traceback_)
-            LOG.error(self.rc_util.msg_with_thread_id(error_type))
+            LOG.error(error_type)
             LOG(error_value)
             for tb in tb_list:
-                LOG.error(self.rc_util.msg_with_thread_id(tb))
+                LOG.error(tb)
 
             msg = "Exception : sqlalchemy error in insert_vm_list_db()."
-            LOG.error(self.rc_util.msg_with_thread_id(msg))
+            LOG.error(msg)
 
             raise exc.SQLAlchemyError
 
         except:
             error_type, error_value, traceback_ = sys.exc_info()
             tb_list = traceback.format_tb(traceback_)
-            LOG.error(self.rc_util.msg_with_thread_id(error_type))
-            LOG.error(self.rc_util.msg_with_thread_id(error_value))
+            LOG.error(error_type)
+            LOG.error(error_value)
 
             for tb in tb_list:
-                LOG.error(self.rc_util.msg_with_thread_id(tb))
+                LOG.error(tb)
 
             msg = "Exception : Exception in insert_vm_list_db()."
-            LOG.error(self.rc_util.msg_with_thread_id(msg))
+            LOG.error(msg)
 
             raise
 
@@ -223,7 +231,7 @@ class RecoveryControllerUtilDb(object):
                     d = datetime.datetime.strptime(u_time, '%Y%m%d%H%M%S')
 
                 except (ValueError, TypeError) as e:
-                    LOG.warning(self.rc_util.msg_with_thread_id(e))
+                    LOG.warning(e)
                     d = None
 
                 return d
@@ -234,12 +242,12 @@ class RecoveryControllerUtilDb(object):
 
             error_type, error_value, traceback_ = sys.exc_info()
             tb_list = traceback.format_tb(traceback_)
-            LOG.error(self.rc_util.msg_with_thread_id(error_type))
-            LOG.error(self.rc_util.msg_with_thread_id(error_value))
+            LOG.error(error_type)
+            LOG.error(error_value)
             for tb in tb_list:
-                LOG.error(self.rc_util.msg_with_thread_id(tb))
+                LOG.error(tb)
 
-            LOG.error(self.rc_util.msg_with_thread_id(e.message))
+            LOG.error(e.message)
 
             raise e
         # Todo: (sampath) correct the exceptions catching
@@ -247,7 +255,7 @@ class RecoveryControllerUtilDb(object):
 
         try:
             msg = "Do add_notification_list."
-            LOG.info(self.rc_util.msg_with_thread_id(msg))
+            LOG.info(msg)
             result = dbapi.add_notification_list(
                 session,
                 create_at=create_at,
@@ -276,28 +284,29 @@ class RecoveryControllerUtilDb(object):
             )
             msg = "Succeeded in add_notification_list. " \
                 + "Return_value = " + str(result)
-            LOG.info(self.rc_util.msg_with_thread_id(msg))
+            LOG.info(msg)
 
             msg = "Do get_all_reserve_list_by_hostname_not_deleted."
-            LOG.info(self.rc_util.msg_with_thread_id(msg))
+            LOG.info(msg)
             cnt = dbapi.get_all_reserve_list_by_hostname_not_deleted(
                 session,
                 jsonData.get("hostname")
             )
             msg = "Succeeded in get_all_reserve_list_by_hostname_not_deleted. " \
                 + "Return_value = " + str(cnt)
-            LOG.info(self.rc_util.msg_with_thread_id(msg))
+            LOG.info(msg)
 
             if len(cnt) > 0:
                 msg = "Do update_reserve_list_by_hostname_as_deleted."
-                LOG.info(self.rc_util.msg_with_thread_id(msg))
+                LOG.info(msg)
                 dbapi.update_reserve_list_by_hostname_as_deleted(
                     session,
                     jsonData.get("hostname"),
                     datetime.datetime.now()
                 )
-                msg = "Succeeded in update_reserve_list_by_hostname_as_deleted."
-                LOG.info(self.rc_util.msg_with_thread_id(msg))
+                msg = "Succeeded in " \
+                    + "update_reserve_list_by_hostname_as_deleted."
+                LOG.info(msg)
 
             ret_dic = {
                 "create_at": create_at,
@@ -331,12 +340,12 @@ class RecoveryControllerUtilDb(object):
 
             error_type, error_value, traceback_ = sys.exc_info()
             tb_list = traceback.format_tb(traceback_)
-            LOG.error(self.rc_util.msg_with_thread_id(error_type))
-            LOG.error(self.rc_util.msg_with_thread_id(error_value))
+            LOG.error(error_type)
+            LOG.error(error_value)
             for tb in tb_list:
-                LOG.error(self.rc_util.msg_with_thread_id(tb))
+                LOG.error(tb)
 
-            LOG.error(self.rc_util.msg_with_thread_id(e.message))
+            LOG.error(e.message)
 
             raise e
 
@@ -359,7 +368,7 @@ class RecoveryControllerUtilDb(object):
             # Todo(sampath): write the test codes
             #                Check it
             msg = "Do get_one_reserve_list_by_cluster_port_for_update."
-            LOG.info(self.rc_util.msg_with_thread_id(msg))
+            LOG.info(msg)
             cnt = dbapi.get_one_reserve_list_by_cluster_port_for_update(
                 session,
                 cluster_port,
@@ -367,11 +376,11 @@ class RecoveryControllerUtilDb(object):
             )
             msg = "Succeeded in get_one_reserve_list_by_cluster_port_for_update. " \
                 + "Return_value = " + str(cnt)
-            LOG.info(self.rc_util.msg_with_thread_id(msg))
+            LOG.info(msg)
 
             if not cnt:
                 msg = "The reserve node not exist in reserve_list DB."
-                LOG.warning(self.rc_util.msg_with_thread_id(msg))
+                LOG.warning(msg)
                 hostname = None
             if not isinstance(cnt, (list, tuple)):
                 hostname = cnt.hostname
@@ -380,12 +389,12 @@ class RecoveryControllerUtilDb(object):
 
             error_type, error_value, traceback_ = sys.exc_info()
             tb_list = traceback.format_tb(traceback_)
-            LOG.error(self.rc_util.msg_with_thread_id(error_type))
-            LOG.error(self.rc_util.msg_with_thread_id(error_value))
+            LOG.error(error_type)
+            LOG.error(error_value)
             for tb in tb_list:
-                LOG.error(self.rc_util.msg_with_thread_id(tb))
+                LOG.error(tb)
 
-            LOG.error(self.rc_util.msg_with_thread_id(e.message))
+            LOG.error(e.message)
 
             raise e
 
@@ -415,37 +424,37 @@ class RecoveryControllerUtilDb(object):
                 else:
                     raise AttributeError
             msg = "Do update_notification_list_dict."
-            LOG.info(self.rc_util.msg_with_thread_id(msg))
+            LOG.info(msg)
             dbapi.update_notification_list_dict(
                 session, notification_id, update_val)
             msg = "Succeeded in update_notification_list_dict."
-            LOG.info(self.rc_util.msg_with_thread_id(msg))
+            LOG.info(msg)
 
         except AttributeError:
             error_type, error_value, traceback_ = sys.exc_info()
             tb_list = traceback.format_tb(traceback_)
-            LOG.error(self.rc_util.msg_with_thread_id(error_type))
-            LOG.error(self.rc_util.msg_with_thread_id(error_value))
+            LOG.error(error_type)
+            LOG.error(error_value)
             for tb in tb_list:
-                LOG.error(self.rc_util.msg_with_thread_id(tb))
+                LOG.error(tb)
 
             msg = "Exception : %s is not in attribute of \
             NotificationList" % (key)
-            LOG.error(self.rc_util.msg_with_thread_id(msg))
+            LOG.error(msg)
             raise AttributeError
 
         except exc.SQLAlchemyError:
 
             error_type, error_value, traceback_ = sys.exc_info()
             tb_list = traceback.format_tb(traceback_)
-            LOG.error(self.rc_util.msg_with_thread_id(error_type))
-            LOG.error(self.rc_util.msg_with_thread_id(error_value))
+            LOG.error(error_type)
+            LOG.error(error_value)
             for tb in tb_list:
-                LOG.error(self.rc_util.msg_with_thread_id(tb))
+                LOG.error(tb)
 
             msg = "Exception : SQLAlchemy.Error in \
             update_notification_list_db()."
-            LOG.error(self.rc_util.msg_with_thread_id(msg))
+            LOG.error(msg)
 
             raise exc.SQLAlchemyError
 
@@ -453,13 +462,13 @@ class RecoveryControllerUtilDb(object):
 
             error_type, error_value, traceback_ = sys.exc_info()
             tb_list = traceback.format_tb(traceback_)
-            LOG.error(self.rc_util.msg_with_thread_id(error_type))
-            LOG.error(self.rc_util.msg_with_thread_id(error_value))
+            LOG.error(error_type)
+            LOG.error(error_value)
             for tb in tb_list:
-                LOG.error(self.rc_util.msg_with_thread_id(tb))
+                LOG.error(tb)
 
             msg = "Exception : KeyError in update_notification_list_db()."
-            LOG.error(self.rc_util.msg_with_thread_id(msg))
+            LOG.error(msg)
 
             raise KeyError
 
@@ -491,36 +500,36 @@ class RecoveryControllerUtilDb(object):
                 else:
                     raise AttributeError
             msg = "Do update_vm_list_by_id_dict."
-            LOG.info(self.rc_util.msg_with_thread_id(msg))
+            LOG.info(msg)
             dbapi.update_vm_list_by_id_dict(session, primary_id, update_val)
             msg = "Succeeded in update_vm_list_by_id_dict."
-            LOG.info(self.rc_util.msg_with_thread_id(msg))
+            LOG.info(msg)
 
         except AttributeError:
             error_type, error_value, traceback_ = sys.exc_info()
             tb_list = traceback.format_tb(traceback_)
-            LOG.error(self.rc_util.msg_with_thread_id(error_type))
-            LOG.error(self.rc_util.msg_with_thread_id(error_value))
+            LOG.error(error_type)
+            LOG.error(error_value)
             for tb in tb_list:
-                LOG.error(self.rc_util.msg_with_thread_id(tb))
+                LOG.error(tb)
 
             msg = "Exception : %s is not in attribute of \
             VmList" % (key)
-            LOG.error(self.rc_util.msg_with_thread_id(msg))
+            LOG.error(msg)
             raise AttributeError
 
         except exc.SQLAlchemyError:
 
             error_type, error_value, traceback_ = sys.exc_info()
             tb_list = traceback.format_tb(traceback_)
-            LOG.error(self.rc_util.msg_with_thread_id(error_type))
-            LOG.error(self.rc_util.msg_with_thread_id(error_value))
+            LOG.error(error_type)
+            LOG.error(error_value)
             for tb in tb_list:
-                LOG.error(self.rc_util.msg_with_thread_id(tb))
+                LOG.error(tb)
 
             msg = "Exception : SQLAlchemy.Error in \
             update_vm_list_by_id_dict()."
-            LOG.error(self.rc_util.msg_with_thread_id(msg))
+            LOG.error(msg)
 
             raise exc.SQLAlchemyError
 
@@ -528,13 +537,13 @@ class RecoveryControllerUtilDb(object):
 
             error_type, error_value, traceback_ = sys.exc_info()
             tb_list = traceback.format_tb(traceback_)
-            LOG.error(self.rc_util.msg_with_thread_id(error_type))
-            LOG.error(self.rc_util.msg_with_thread_id(error_value))
+            LOG.error(error_type)
+            LOG.error(error_value)
             for tb in tb_list:
-                LOG.error(self.rc_util.msg_with_thread_id(tb))
+                LOG.error(tb)
 
             msg = "Exception : KeyError in update_notification_list_db()."
-            LOG.error(self.rc_util.msg_with_thread_id(msg))
+            LOG.error(msg)
 
             raise KeyError
 
@@ -550,7 +559,6 @@ class RecoveryControllerUtilApi(object):
 
     def __init__(self, config_object):
         self.rc_config = config_object
-        self.rc_util = RecoveryControllerUtil(self.rc_config)
 
         project_id = self._fetch_project_id()
         auth_args = {
@@ -560,7 +568,7 @@ class RecoveryControllerUtilApi(object):
             'project_id': project_id,
             'user_domain_name': self.rc_config.conf_nova['domain'],
             'project_domain_name': self.rc_config.conf_nova['domain'],
-            }
+        }
 
         self.auth_session = self._get_session(auth_args)
 
@@ -572,7 +580,6 @@ class RecoveryControllerUtilApi(object):
                                               connect_retries=api_retries,
                                               logger=LOG.logger)
 
-    @log_process_begin_and_end.output_log
     def _get_session(self, auth_args):
         """ Return Keystone API session object."""
         loader = loading.get_plugin_loader('password')
@@ -581,7 +588,6 @@ class RecoveryControllerUtilApi(object):
 
         return sess
 
-    @log_process_begin_and_end.output_log
     def _fetch_project_id(self):
         auth_args = {
             'auth_url': self.rc_config.conf_nova['auth_url'],
@@ -590,14 +596,14 @@ class RecoveryControllerUtilApi(object):
             'project_name': self.rc_config.conf_nova['project_name'],
             'project_domain_name': self.rc_config.conf_nova['domain'],
             'user_domain_name': self.rc_config.conf_nova['domain'],
-            }
+        }
         sess = self._get_session(auth_args)
 
         ks_client = keystone_client.Client(self.KEYSTONE_API_VERSION,
                                            session=sess)
         project_name = self.rc_config.conf_nova['project_name']
         projects = filter(lambda x: (x.name == project_name),
-                         ks_client.projects.list())
+                          ks_client.projects.list())
 
         if len(projects) != 1:
             msg = ("Project name: %s doesn't exist in project list."
@@ -606,7 +612,6 @@ class RecoveryControllerUtilApi(object):
 
         return projects[0].id
 
-    @log_process_begin_and_end.output_log
     def do_instance_show(self, uuid):
         """Returns Server Intance.
 
@@ -615,18 +620,17 @@ class RecoveryControllerUtilApi(object):
         """
         try:
             msg = ('Call Server Details API with %s' % uuid)
-            LOG.info(self.rc_util.msg_with_thread_id(msg))
+            LOG.info(msg)
             server = self.nova_client.servers.get(uuid)
 
         except exceptions.ClientException as e:
             msg = 'Fails to call Nova get Server Details API: %s' % e
-            LOG.error(self.rc_util.msg_with_thread_id(msg))
+            LOG.error(msg)
 
             raise
 
         return server
 
-    @log_process_begin_and_end.output_log
     def do_instance_stop(self, uuid):
         """Call Nova instance stop API.
 
@@ -635,21 +639,20 @@ class RecoveryControllerUtilApi(object):
         """
         try:
             msg = ('Call Stop API with %s' % uuid)
-            LOG.info(self.rc_util.msg_with_thread_id(msg))
+            LOG.info(msg)
             self.nova_client.servers.stop(uuid)
 
         except exceptions.Conflict as e:
             msg = "Server instance %s is already in stopped." % uuid
             error_msg = "Original Nova client's error: %e" % e
-            LOG.error(self.rc_util.msg_with_thread_id(msg + error_msg))
+            LOG.error(msg + error_msg)
             raise EnvironmentError(msg)
 
         except exceptions.ClientException as e:
             msg = 'Fails to call Nova Server Stop API: %s' % e
-            LOG.error(self.rc_util.msg_with_thread_id(msg))
+            LOG.error(msg)
             raise
 
-    @log_process_begin_and_end.output_log
     def do_instance_start(self, uuid):
         """Call Nova instance start API.
 
@@ -658,21 +661,20 @@ class RecoveryControllerUtilApi(object):
         """
         try:
             msg = ('Call Start API with %s' % uuid)
-            LOG.info(self.rc_util.msg_with_thread_id(msg))
+            LOG.info(msg)
             self.nova_client.servers.start(uuid)
 
         except exceptions.Conflict as e:
             msg = "Server instance %s is already in active." % uuid
             error_msg = "Original Nova client's error: %e" % e
-            LOG.error(self.rc_util.msg_with_thread_id(msg + error_msg))
+            LOG.error(msg + error_msg)
             raise EnvironmentError(msg)
 
         except exceptions.ClientException as e:
             msg = 'Fails to call Nova Server Start API: %s' % e
-            LOG.error(self.rc_util.msg_with_thread_id(msg))
+            LOG.error(msg)
             raise
 
-    @log_process_begin_and_end.output_log
     def do_instance_reset(self, uuid, status):
         """ Call Nova reset state API.
 
@@ -681,16 +683,15 @@ class RecoveryControllerUtilApi(object):
         """
         try:
             msg = ('Call Reset State API with %s to %s' %
-                                   (uuid, status))
-            LOG.info(self.rc_util.msg_with_thread_id(msg))
+                   (uuid, status))
+            LOG.info(msg)
             self.nova_client.servers.reset_state(uuid, status)
 
         except exceptions.ClientException as e:
             msg = 'Fails to call Nova Server Reset State API: %s' % e
-            LOG.error(self.rc_util.msg_with_thread_id(msg))
+            LOG.error(msg)
             raise EnvironmentError(msg)
 
-    @log_process_begin_and_end.output_log
     def fetch_servers_on_hypervisor(self, hypervisor):
         """Fetch server instance list on the hypervisor.
 
@@ -700,10 +701,10 @@ class RecoveryControllerUtilApi(object):
         opts = {
             'host': hypervisor,
             'all_tenants': True,
-            }
+        }
         try:
             msg = ('Fetch Server list on %s' % hypervisor)
-            LOG.info(self.rc_util.msg_with_thread_id(msg))
+            LOG.info(msg)
             servers = self.nova_client.servers.list(detailed=False,
                                                     search_opts=opts)
 
@@ -711,10 +712,9 @@ class RecoveryControllerUtilApi(object):
 
         except exceptions.ClientException as e:
             msg = 'Fails to call Nova Servers List API: %s' % e
-            LOG.error(self.rc_util.msg_with_thread_id(msg))
+            LOG.error(msg)
             raise
 
-    @log_process_begin_and_end.output_log
     def disable_host_status(self, hostname):
         """Disable host' status.
 
@@ -722,15 +722,14 @@ class RecoveryControllerUtilApi(object):
         """
         try:
             msg = ('Disable nova-compute on %s' % hostname)
-            LOG.info(self.rc_util.msg_with_thread_id(msg))
+            LOG.info(msg)
             self.nova_client.services.disable(hostname, 'nova-compute')
 
         except exceptions.ClientException as e:
             msg = 'Fails to disable nova-compute on %s: %s' % (hostname, e)
-            LOG.error(self.rc_util.msg_with_thread_id(msg))
+            LOG.error(msg)
             raise
 
-    @log_process_begin_and_end.output_log
     def do_instance_evacuate(self, uuid, targethost):
         """Call evacuate API for server instance.
 
@@ -739,31 +738,13 @@ class RecoveryControllerUtilApi(object):
         """
         try:
             msg = ('Call Evacuate API with %s to %s' %
-                                   (uuid, targethost))
-            LOG.info(self.rc_util.msg_with_thread_id(msg))
+                   (uuid, targethost))
+            LOG.info(msg)
             self.nova_client.servers.evacuate(uuid, host=targethost,
                                               on_shared_storage=True)
 
         except exceptions.ClientException as e:
             msg = ('Fails to call Instance Evacuate API onto %s: %s'
                    % (targethost, e))
-            LOG.error(self.rc_util.msg_with_thread_id(msg))
+            LOG.error(msg)
             raise
-
-class RecoveryControllerUtil(object):
-
-    """
-    Other utility classes for VM recovery control
-    """
-
-    def __init__(self, config_object):
-        self.rc_config = config_object
-
-    def msg_with_thread_id(self, rawmsg):
-        """
-        Add thread id to rawmsg.
-        :rawmsg : message.
-        :return : message with thread id.
-        """
-        msg = str(threading.current_thread()) + " " + str(rawmsg)
-        return msg

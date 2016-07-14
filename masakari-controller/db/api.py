@@ -96,8 +96,7 @@ def _retry_on_deadlock(fn):
     return wrapped
 
 
-def get_engine():
-    rc_config = config.RecoveryControllerConfig()
+def get_engine(rc_config):
     # Connect db
     conf_db_dic = rc_config.get_value('db')
     """

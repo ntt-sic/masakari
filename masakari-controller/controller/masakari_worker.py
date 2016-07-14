@@ -39,8 +39,9 @@ if parentdir not in sys.path:
 import db.api as dbapi
 from oslo_log import log as logging
 
-log_process_begin_and_end = util.LogProcessBeginAndEnd()
 LOG = logging.getLogger(__name__)
+log_process_begin_and_end = util.LogProcessBeginAndEnd(LOG)
+
 
 class RecoveryControllerWorker(object):
 
@@ -51,7 +52,6 @@ class RecoveryControllerWorker(object):
 
     def __init__(self, config_object):
         self.rc_config = config_object
-        self.rc_util = util.RecoveryControllerUtil(self.rc_config)
         self.rc_util_db = util.RecoveryControllerUtilDb(self.rc_config)
         self.rc_util_api = util.RecoveryControllerUtilApi(self.rc_config)
 
@@ -79,33 +79,33 @@ class RecoveryControllerWorker(object):
                         raise EnvironmentError("Failed to nova show API.")
                     else:
                         msg = (" Retry nova show API.")
-                        LOG.info(self.rc_util.msg_with_thread_id(msg))
+                        LOG.info(msg)
                         greenthread.sleep(int(api_retry_interval))
                         cnt += 1
 
         except EnvironmentError:
             error_type, error_value, traceback_ = sys.exc_info()
             tb_list = traceback.format_tb(traceback_)
-            LOG.error(self.rc_util.msg_with_thread_id(error_type))
-            LOG.error(self.rc_util.msg_with_thread_id(error_value))
+            LOG.error(error_type)
+            LOG.error(error_value)
             for tb in tb_list:
-                LOG.error(self.rc_util.msg_with_thread_id(tb))
+                LOG.error(tb)
             raise EnvironmentError
         except KeyError:
             error_type, error_value, traceback_ = sys.exc_info()
             tb_list = traceback.format_tb(traceback_)
-            LOG.error(self.rc_util.msg_with_thread_id(error_type))
-            LOG.error(self.rc_util.msg_with_thread_id(error_value))
+            LOG.error(error_type)
+            LOG.error(error_value)
             for tb in tb_list:
-                LOG.error(self.rc_util.msg_with_thread_id(tb))
+                LOG.error(tb)
             raise KeyError
         except:
             error_type, error_value, traceback_ = sys.exc_info()
             tb_list = traceback.format_tb(traceback_)
-            LOG.error(self.rc_util.msg_with_thread_id(error_type))
-            LOG.error(self.rc_util.msg_with_thread_id(error_value))
+            LOG.error(error_type)
+            LOG.error(error_value)
             for tb in tb_list:
-                LOG.error(self.rc_util.msg_with_thread_id(tb))
+                LOG.error(tb)
             raise
 
     @log_process_begin_and_end.output_log
@@ -113,11 +113,11 @@ class RecoveryControllerWorker(object):
         # TODO(sampath): remove unused 'uuid' form args
         try:
             msg = "Do get_vm_list_by_id."
-            LOG.info(self.rc_util.msg_with_thread_id(msg))
+            LOG.info(msg)
             recover_data = dbapi.get_vm_list_by_id(session, primary_id)
             msg = "Succeeded in get_vm_list_by_id. " \
                 + "Return_value = " + str(recover_data)
-            LOG.info(self.rc_util.msg_with_thread_id(msg))
+            LOG.info(msg)
 
             if recover_data is None:
                 raise EnvironmentError("Failed to recovery info.")
@@ -129,26 +129,26 @@ class RecoveryControllerWorker(object):
         except EnvironmentError:
             error_type, error_value, traceback_ = sys.exc_info()
             tb_list = traceback.format_tb(traceback_)
-            LOG.error(self.rc_util.msg_with_thread_id(error_type))
-            LOG.error(self.rc_util.msg_with_thread_id(error_value))
+            LOG.error(error_type)
+            LOG.error(error_value)
             for tb in tb_list:
-                LOG.error(self.rc_util.msg_with_thread_id(tb))
+                LOG.error(tb)
             raise EnvironmentError
         except KeyError:
             error_type, error_value, traceback_ = sys.exc_info()
             tb_list = traceback.format_tb(traceback_)
-            LOG.error(self.rc_util.msg_with_thread_id(error_type))
-            LOG.error(self.rc_util.msg_with_thread_id(error_value))
+            LOG.error(error_type)
+            LOG.error(error_value)
             for tb in tb_list:
-                LOG.error(self.rc_util.msg_with_thread_id(tb))
+                LOG.error(tb)
             raise KeyError
         except:
             error_type, error_value, traceback_ = sys.exc_info()
             tb_list = traceback.format_tb(traceback_)
-            LOG.error(self.rc_util.msg_with_thread_id(error_type))
-            LOG.error(self.rc_util.msg_with_thread_id(error_value))
+            LOG.error(error_type)
+            LOG.error(error_value)
             for tb in tb_list:
-                LOG.error(self.rc_util.msg_with_thread_id(tb))
+                LOG.error(tb)
             raise
 
         return recover_by, recover_to
@@ -175,7 +175,7 @@ class RecoveryControllerWorker(object):
                 else:
                     msg = "Inapplicable vm. instance_uuid = '%s', " \
                           "vm_state = '%s'" % (uuid, vm_state)
-                    LOG.info(self.rc_util.msg_with_thread_id(msg))
+                    LOG.info(msg)
 
             elif HA_Enabled == 'OFF':
                 res = self._skip_node_accident_vm_recovery(
@@ -212,34 +212,34 @@ class RecoveryControllerWorker(object):
             status = self.STATUS_ERROR
             error_type, error_value, traceback_ = sys.exc_info()
             tb_list = traceback.format_tb(traceback_)
-            LOG.error(self.rc_util.msg_with_thread_id(error_type))
-            LOG.error(self.rc_util.msg_with_thread_id(error_value))
+            LOG.error(error_type)
+            LOG.error(error_value)
             for tb in tb_list:
-                LOG.error(self.rc_util.msg_with_thread_id(tb))
+                LOG.error(tb)
         except KeyError:
             status = self.STATUS_ERROR
             error_type, error_value, traceback_ = sys.exc_info()
             tb_list = traceback.format_tb(traceback_)
-            LOG.error(self.rc_util.msg_with_thread_id(error_type))
-            LOG.error(self.rc_util.msg_with_thread_id(error_value))
+            LOG.error(error_type)
+            LOG.error(error_value)
             for tb in tb_list:
-                LOG.error(self.rc_util.msg_with_thread_id(tb))
+                LOG.error(tb)
         except ValueError:
             status = self.STATUS_ERROR
             error_type, error_value, traceback_ = sys.exc_info()
             tb_list = traceback.format_tb(traceback_)
-            LOG.error(self.rc_util.msg_with_thread_id(error_type))
-            LOG.error(self.rc_util.msg_with_thread_id(error_value))
+            LOG.error(error_type)
+            LOG.error(error_value)
             for tb in tb_list:
-                LOG.error(self.rc_util.msg_with_thread_id(tb))
+                LOG.error(tb)
         except:
             status = self.STATUS_ERROR
             error_type, error_value, traceback_ = sys.exc_info()
             tb_list = traceback.format_tb(traceback_)
-            LOG.error(self.rc_util.msg_with_thread_id(error_type))
-            LOG.error(self.rc_util.msg_with_thread_id(error_value))
+            LOG.error(error_type)
+            LOG.error(error_value)
             for tb in tb_list:
-                LOG.error(self.rc_util.msg_with_thread_id(tb))
+                LOG.error(tb)
 
         return status
 
@@ -254,24 +254,24 @@ class RecoveryControllerWorker(object):
             msg = "Skipped recovery. " \
                   "instance_id:%s, " \
                   "accident type: [node accident]." % (uuid)
-            LOG.info(self.rc_util.msg_with_thread_id(msg))
+            LOG.info(msg)
 
         except EnvironmentError:
             status = self.STATUS_ERROR
             error_type, error_value, traceback_ = sys.exc_info()
             tb_list = traceback.format_tb(traceback_)
-            LOG.error(self.rc_util.msg_with_thread_id(error_type))
-            LOG.error(self.rc_util.msg_with_thread_id(error_value))
+            LOG.error(error_type)
+            LOG.error(error_value)
             for tb in tb_list:
-                LOG.error(self.rc_util.msg_with_thread_id(tb))
+                LOG.error(tb)
         except:
             status = self.STATUS_ERROR
             error_type, error_value, traceback_ = sys.exc_info()
             tb_list = traceback.format_tb(traceback_)
-            LOG.error(self.rc_util.msg_with_thread_id(error_type))
-            LOG.error(self.rc_util.msg_with_thread_id(error_value))
+            LOG.error(error_type)
+            LOG.error(error_value)
             for tb in tb_list:
-                LOG.error(self.rc_util.msg_with_thread_id(tb))
+                LOG.error(tb)
 
         return status
 
@@ -319,18 +319,18 @@ class RecoveryControllerWorker(object):
             status = self.STATUS_ERROR
             error_type, error_value, traceback_ = sys.exc_info()
             tb_list = traceback.format_tb(traceback_)
-            LOG.error(self.rc_util.msg_with_thread_id(error_type))
-            LOG.error(self.rc_util.msg_with_thread_id(error_value))
+            LOG.error(error_type)
+            LOG.error(error_value)
             for tb in tb_list:
-                LOG.error(self.rc_util.msg_with_thread_id(tb))
+                LOG.error(tb)
         except:
             status = self.STATUS_ERROR
             error_type, error_value, traceback_ = sys.exc_info()
             tb_list = traceback.format_tb(traceback_)
-            LOG.error(self.rc_util.msg_with_thread_id(error_type))
-            LOG.error(self.rc_util.msg_with_thread_id(error_value))
+            LOG.error(error_type)
+            LOG.error(error_value)
             for tb in tb_list:
-                LOG.error(self.rc_util.msg_with_thread_id(tb))
+                LOG.error(tb)
 
         return status
 
@@ -346,29 +346,28 @@ class RecoveryControllerWorker(object):
             self.rc_util_api.do_instance_stop(uuid)
 
             msg = ("Skipped recovery. instance_id:%s, "
-                    "accident type: [qemu process accident]." % uuid)
-            LOG.info(self.rc_util.msg_with_thread_id(msg))
+                   "accident type: [qemu process accident]." % uuid)
+            LOG.info(msg)
 
         except EnvironmentError:
             status = self.STATUS_ERROR
             error_type, error_value, traceback_ = sys.exc_info()
             tb_list = traceback.format_tb(traceback_)
-            LOG.error(self.rc_util.msg_with_thread_id(error_type))
-            LOG.error(self.rc_util.msg_with_thread_id(error_value))
+            LOG.error(error_type)
+            LOG.error(error_value)
             for tb in tb_list:
-                LOG.error(self.rc_util.msg_with_thread_id(tb))
+                LOG.error(tb)
         except:
             status = self.STATUS_ERROR
             error_type, error_value, traceback_ = sys.exc_info()
             tb_list = traceback.format_tb(traceback_)
-            LOG.error(self.rc_util.msg_with_thread_id(error_type))
-            LOG.error(self.rc_util.msg_with_thread_id(error_value))
+            LOG.error(error_type)
+            LOG.error(error_value)
             for tb in tb_list:
-                LOG.error(self.rc_util.msg_with_thread_id(tb))
+                LOG.error(tb)
 
         return status
 
-    @log_process_begin_and_end.output_log
     def host_maintenance_mode(self, notification_id, hostname,
                               update_progress):
         """
@@ -377,7 +376,8 @@ class RecoveryControllerWorker(object):
            :param hostname: Host name of brocade target
         """
         try:
-            db_engine = dbapi.get_engine()
+            self.rc_config.set_record_identifier(notification_id)
+            db_engine = dbapi.get_engine(self.rc_config)
             session = dbapi.get_session(db_engine)
             self.rc_util_api.disable_host_status(hostname)
 
@@ -389,18 +389,18 @@ class RecoveryControllerWorker(object):
         except KeyError:
             error_type, error_value, traceback_ = sys.exc_info()
             tb_list = traceback.format_tb(traceback_)
-            LOG.error(self.rc_util.msg_with_thread_id(error_type))
-            LOG.error(self.rc_util.msg_with_thread_id(error_value))
+            LOG.error(error_type)
+            LOG.error(error_value)
             for tb in tb_list:
-                LOG.error(self.rc_util.msg_with_thread_id(tb))
+                LOG.error(tb)
             return
         except:
             error_type, error_value, traceback_ = sys.exc_info()
             tb_list = traceback.format_tb(traceback_)
-            LOG.error(self.rc_util.msg_with_thread_id(error_type))
-            LOG.error(self.rc_util.msg_with_thread_id(error_value))
+            LOG.error(error_type)
+            LOG.error(error_value)
             for tb in tb_list:
-                LOG.error(self.rc_util.msg_with_thread_id(tb))
+                LOG.error(tb)
             return
 
     @log_process_begin_and_end.output_log
@@ -413,7 +413,8 @@ class RecoveryControllerWorker(object):
         """
         try:
             sem.acquire()
-            db_engine = dbapi.get_engine()
+            self.rc_config.set_record_identifier(primary_id)
+            db_engine = dbapi.get_engine(self.rc_config)
             session = dbapi.get_session(db_engine)
 
             # Initlize status.
@@ -452,28 +453,28 @@ class RecoveryControllerWorker(object):
             status = self.STATUS_ERROR
             error_type, error_value, traceback_ = sys.exc_info()
             tb_list = traceback.format_tb(traceback_)
-            LOG.error(self.rc_util.msg_with_thread_id(error_type))
-            LOG.error(self.rc_util.msg_with_thread_id(error_value))
+            LOG.error(error_type)
+            LOG.error(error_value)
             for tb in tb_list:
-                LOG.error(self.rc_util.msg_with_thread_id(tb))
+                LOG.error(tb)
             return
         except KeyError:
             status = self.STATUS_ERROR
             error_type, error_value, traceback_ = sys.exc_info()
             tb_list = traceback.format_tb(traceback_)
-            LOG.error(self.rc_util.msg_with_thread_id(error_type))
-            LOG.error(self.rc_util.msg_with_thread_id(error_value))
+            LOG.error(error_type)
+            LOG.error(error_value)
             for tb in tb_list:
-                LOG.error(self.rc_util.msg_with_thread_id(tb))
+                LOG.error(tb)
             return
         except:
             status = self.STATUS_ERROR
             error_type, error_value, traceback_ = sys.exc_info()
             tb_list = traceback.format_tb(traceback_)
-            LOG.error(self.rc_util.msg_with_thread_id(error_type))
-            LOG.error(self.rc_util.msg_with_thread_id(error_value))
+            LOG.error(error_type)
+            LOG.error(error_value)
             for tb in tb_list:
-                LOG.error(self.rc_util.msg_with_thread_id(tb))
+                LOG.error(tb)
             return
         finally:
             try:
@@ -483,7 +484,7 @@ class RecoveryControllerWorker(object):
                         session, 'progress', 2, primary_id)
 
                     msg = "Recovery process has been completed successfully."
-                    LOG.info(self.rc_util.msg_with_thread_id(msg))
+                    LOG.info(msg)
 
                 # Abnormal termination.
                 else:
@@ -491,7 +492,7 @@ class RecoveryControllerWorker(object):
                         session, 'progress', 3, primary_id)
 
                     msg = "Recovery process has been terminated abnormally."
-                    LOG.info(self.rc_util.msg_with_thread_id(msg))
+                    LOG.info(msg)
 
                 # Release semaphore
                 if sem:
@@ -500,8 +501,8 @@ class RecoveryControllerWorker(object):
             except:
                 error_type, error_value, traceback_ = sys.exc_info()
                 tb_list = traceback.format_tb(traceback_)
-                LOG.error(self.rc_util.msg_with_thread_id(error_type))
-                LOG.error(self.rc_util.msg_with_thread_id(error_value))
+                LOG.error(error_type)
+                LOG.error(error_value)
                 for tb in tb_list:
-                    LOG.error(self.rc_util.msg_with_thread_id(tb))
+                    LOG.error(tb)
                 return

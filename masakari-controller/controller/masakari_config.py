@@ -27,10 +27,96 @@ import os
 import socket
 import threading
 import errno
+import uuid
+
 from oslo_config import cfg
 from oslo_log import log as logging
+from oslo_context import context
+
 
 LOG = logging.getLogger(__name__)
+_request_store = threading.local()
+context._request_store = _request_store
+
+
+def generate_request_id():
+    """Generate a unique request id."""
+    return 'req-%s' % uuid.uuid4()
+
+
+class RequestContext(context.RequestContext):
+
+    """Helper class to represent useful information about a request context.
+
+    Stores information about the security context under which the user
+    accesses the system, as well as additional request information.
+    """
+
+    user_idt_format = '{user} {tenant} {domain} {user_domain} {p_domain} ' \
+        + '{thread_name} {record_identifier}'
+
+    def __init__(self, auth_token=None, user=None, tenant=None, domain=None,
+                 user_domain=None, project_domain=None, is_admin=False,
+                 read_only=False, show_deleted=False, request_id=None,
+                 resource_uuid=None, overwrite=True, roles=None,
+                 thread_name=None, record_identifier=None):
+        """Initialize the RequestContext
+
+        :param overwrite: Set to False to ensure that the greenthread local
+                          copy of the index is not overwritten.
+        """
+        self.thread_name = thread_name
+        self.record_identifier = record_identifier
+        self.auth_token = auth_token
+        self.user = user
+        self.tenant = tenant
+        self.domain = domain
+        self.user_domain = user_domain
+        self.project_domain = project_domain
+        self.is_admin = is_admin
+        self.read_only = read_only
+        self.show_deleted = show_deleted
+        self.resource_uuid = resource_uuid
+        self.roles = roles or []
+        if not request_id:
+            request_id = generate_request_id()
+        self.request_id = request_id
+        if overwrite or not get_current():
+            self.update_store()
+
+    def update_store(self):
+        """Store the context in the current thread."""
+        _request_store.context = self
+
+    def to_dict(self):
+        """Return a dictionary of context attributes."""
+        user_idt = (
+            self.user_idt_format.format(
+                user=self.user or '-',
+                tenant=self.tenant or '-',
+                domain=self.domain or '-',
+                user_domain=self.user_domain or '-',
+                p_domain=self.project_domain or '-',
+                thread_name=self.thread_name or '-',
+                record_identifier=self.record_identifier or '-'))
+
+        return {'user': self.user,
+                'tenant': self.tenant,
+                'domain': self.domain,
+                'user_domain': self.user_domain,
+                'project_domain': self.project_domain,
+                'is_admin': self.is_admin,
+                'read_only': self.read_only,
+                'show_deleted': self.show_deleted,
+                'auth_token': self.auth_token,
+                'request_id': self.request_id,
+                'resource_uuid': self.resource_uuid,
+                'roles': self.roles,
+                'user_identity': user_idt,
+                'thread_name': self.thread_name,
+                'record_identifier': self.record_identifier}
+
+
 class RecoveryControllerConfig(object):
 
     """
@@ -45,9 +131,11 @@ class RecoveryControllerConfig(object):
         that are specified in the configuration file in the dictionary type
         for each section.
         """
+
         if not config_path:
             config_path = '/etc/masakari/masakari-controller.conf'
 
+        self.record_identifier = '-'
         self._get_option(config_path)
 
     def _get_option(self, config_file_path):
@@ -179,9 +267,15 @@ class RecoveryControllerConfig(object):
 
         level = self.conf_log.get('log_level')
 
+        logging_context_format_string = '%(asctime)s.%(msecs)03d %(process)d %(levelname)s ' \
+            + '%(name)s [%(thread_name)s %(record_identifier)s] %(message)s'
         logging.set_defaults(
+            logging_context_format_string=logging_context_format_string,
             default_log_levels=logging.get_default_log_levels() +
             ['controller=' + level])
+        RequestContext(thread_name=str(
+            threading.current_thread().getName()),
+            record_identifier=self.record_identifier)
 
         DOMAIN = "masakari"
         CONF.log_file = self.conf_log.get("log_file")
@@ -201,4 +295,13 @@ class RecoveryControllerConfig(object):
             else:
                 raise
 
+        return
+
+    def set_record_identifier(self, record_identifier=None):
+        if record_identifier:
+            self.record_identifier = str(record_identifier)
+        else:
+            self.record_identifier = '-'
+
+        self._log_setup()
         return
