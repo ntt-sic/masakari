@@ -44,6 +44,7 @@ if parentdir not in sys.path:
     sys.path = [parentdir] + sys.path
 
 import controller.masakari_starter as starter
+from controller.masakari_util import RecoveryControllerUtil as util
 from controller.masakari_util import RecoveryControllerUtilDb as util_db
 from controller.masakari_util import LogProcessBeginAndEnd
 from oslo_log import log as oslo_logging
@@ -53,6 +54,7 @@ import db.api as dbapi
 
 LOG = oslo_logging.getLogger('controller.masakari_controller')
 log_process_begin_and_end = LogProcessBeginAndEnd(LOG)
+NOTIFICATION_LIST = "notification_list"
 
 
 class RecoveryController(object):
@@ -77,6 +79,7 @@ class RecoveryController(object):
         """
         try:
             self.rc_config = config.RecoveryControllerConfig()
+            self.rc_util = util()
 
             msg = "Succeeded in reading the configration file."
             LOG.info(msg)
@@ -155,8 +158,12 @@ class RecoveryController(object):
                             + row.notification_hostname \
                             + " update_progress=False"
                         LOG.info(msg)
+                        thread_name = self.rc_util.make_thread_name(
+                            NOTIFICATION_LIST,
+                            row.notification_id)
                         th = threading.Thread(
                             target=self.rc_worker.host_maintenance_mode,
+                            name=thread_name,
                             args=(row.notification_id,
                                   row.notification_hostname,
                                   False,))
@@ -185,8 +192,12 @@ class RecoveryController(object):
                             + row.notification_cluster_port \
                             + " retry_mode=" + str(retry_mode)
                         LOG.info(msg)
+                        thread_name = self.rc_util.make_thread_name(
+                            NOTIFICATION_LIST,
+                            row.notification_id)
                         th = threading.Thread(
                             target=self.rc_starter.add_failed_host,
+                            name=thread_name,
                             args=(row.notification_id,
                                   row.notification_hostname,
                                   row.notification_cluster_port,
@@ -203,8 +214,12 @@ class RecoveryController(object):
                             + " notification_uuid=" \
                             + row.notification_uuid
                         LOG.info(msg)
+                        thread_name = self.rc_util.make_thread_name(
+                            NOTIFICATION_LIST,
+                            row.notification_id)
                         th = threading.Thread(
                             target=self.rc_starter.add_failed_instance,
+                            name=thread_name,
                             args=(row.notification_id,
                                   row.notification_uuid, ))
                         th.start()
@@ -217,8 +232,12 @@ class RecoveryController(object):
                             + row.notification_hostname \
                             + "update_progress=True"
                         LOG.info(msg)
+                        thread_name = self.rc_util.make_thread_name(
+                            NOTIFICATION_LIST,
+                            row.notification_id)
                         th = threading.Thread(
                             target=self.rc_worker.host_maintenance_mode,
+                            name=thread_name,
                             args=(row.notification_id,
                                   row.notification_hostname,
                                   True, ))
@@ -230,8 +249,10 @@ class RecoveryController(object):
             # insted call rc_starter.handle_pending_instances()
             msg = "Run thread rc_starter.handle_pending_instances."
             LOG.info(msg)
+            thread_name = "Thread:handle_pending_instances"
             th = threading.Thread(
-                target=self.rc_starter.handle_pending_instances)
+                target=self.rc_starter.handle_pending_instances,
+                name=thread_name)
             th.start()
 
             # Start reciever process for notification
@@ -448,8 +469,12 @@ class RecoveryController(object):
                                 "notification_hostname") \
                             + "update_progress=False"
                         LOG.info(msg)
+                        thread_name = self.rc_util.make_thread_name(
+                            NOTIFICATION_LIST,
+                            notification_list_dic.get("notification_id"))
                         th = threading.Thread(
                             target=self.rc_worker.host_maintenance_mode,
+                            name=thread_name,
                             args=(notification_list_dic.get(
                                 "notification_id"), notification_list_dic.get(
                                 "notification_hostname"),
@@ -478,8 +503,12 @@ class RecoveryController(object):
                                 "notification_cluster_port") \
                             + " retry_mode=" + str(retry_mode)
                         LOG.info(msg)
+                        thread_name = self.rc_util.make_thread_name(
+                            NOTIFICATION_LIST,
+                            notification_list_dic.get("notification_id"))
                         th = threading.Thread(
                             target=self.rc_starter.add_failed_host,
+                            name=thread_name,
                             args=(notification_list_dic.get(
                                 "notification_id"),
                                 notification_list_dic.get(
@@ -499,8 +528,12 @@ class RecoveryController(object):
                                 "notification_hostname") \
                             + "update_progress=False"
                         LOG.info(msg)
+                        thread_name = self.rc_util.make_thread_name(
+                            NOTIFICATION_LIST,
+                            notification_list_dic.get("notification_id"))
                         th = threading.Thread(
                             target=self.rc_worker.host_maintenance_mode,
+                            name=thread_name,
                             args=(notification_list_dic.get(
                                 "notification_id"),
                                 notification_list_dic.get(
@@ -516,8 +549,12 @@ class RecoveryController(object):
                             + notification_list_dic.get("notification_uuid") \
                             + " retry_mode=" + str(retry_mode)
                         LOG.info(msg)
+                        thread_name = self.rc_util.make_thread_name(
+                            NOTIFICATION_LIST,
+                            notification_list_dic.get("notification_id"))
                         th = threading.Thread(
                             target=self.rc_starter.add_failed_instance,
+                            name=thread_name,
                             args=(
                                 notification_list_dic.get("notification_id"),
                                 notification_list_dic.get(
@@ -533,8 +570,12 @@ class RecoveryController(object):
                                 "notification_hostname") \
                             + "update_progress=False"
                         LOG.info(msg)
+                        thread_name = self.rc_util.make_thread_name(
+                            NOTIFICATION_LIST,
+                            notification_list_dic.get("notification_id"))
                         th = threading.Thread(
                             target=self.rc_worker.host_maintenance_mode,
+                            name=thread_name,
                             args=(
                                 notification_list_dic.get("notification_id"),
                                 notification_list_dic.get(

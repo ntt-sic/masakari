@@ -376,7 +376,7 @@ class RecoveryControllerWorker(object):
            :param hostname: Host name of brocade target
         """
         try:
-            self.rc_config.set_record_identifier(notification_id)
+            self.rc_config.set_request_context()
             db_engine = dbapi.get_engine(self.rc_config)
             session = dbapi.get_session(db_engine)
             self.rc_util_api.disable_host_status(hostname)
@@ -413,7 +413,7 @@ class RecoveryControllerWorker(object):
         """
         try:
             sem.acquire()
-            self.rc_config.set_record_identifier(primary_id)
+            self.rc_config.set_request_context()
             db_engine = dbapi.get_engine(self.rc_config)
             session = dbapi.get_session(db_engine)
 

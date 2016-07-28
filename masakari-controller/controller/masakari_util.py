@@ -748,3 +748,11 @@ class RecoveryControllerUtilApi(object):
                    % (targethost, e))
             LOG.error(msg)
             raise
+
+
+class RecoveryControllerUtil(object):
+
+    def make_thread_name(self, table_name, record_identifier):
+        thread_name = ('Thread:%s(%s)'
+            % (table_name, str(record_identifier)))
+        return thread_name

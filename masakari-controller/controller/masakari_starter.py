@@ -45,6 +45,7 @@ from oslo_log import log as logging
 
 LOG = logging.getLogger(__name__)
 log_process_begin_and_end = util.LogProcessBeginAndEnd(LOG)
+VM_LIST = "vm_list"
 
 
 class RecoveryControllerStarter(object):
@@ -61,6 +62,7 @@ class RecoveryControllerStarter(object):
         """
         self.rc_config = config_object
         self.rc_worker = worker.RecoveryControllerWorker(config_object)
+        self.rc_util = util.RecoveryControllerUtil()
         self.rc_util_db = util.RecoveryControllerUtilDb(config_object)
         self.rc_util_api = util.RecoveryControllerUtilApi(config_object)
 
@@ -210,7 +212,7 @@ class RecoveryControllerStarter(object):
         """
 
         try:
-            self.rc_config.set_record_identifier(notification_id)
+            self.rc_config.set_request_context()
             db_engine = dbapi.get_engine(self.rc_config)
             session = dbapi.get_session(db_engine)
 
@@ -236,8 +238,10 @@ class RecoveryControllerStarter(object):
                         + " notification_uuid=" + notification_uuid \
                         + " primary_id=" + str(primary_id)
                     LOG.info(msg)
-
+                    thread_name = self.rc_util.make_thread_name(
+                        VM_LIST, primary_id)
                     threading.Thread(target=self.rc_worker.recovery_instance,
+                                     name=thread_name,
                                      args=(notification_uuid, primary_id,
                                            sem_recovery_instance)).start()
 
@@ -276,7 +280,7 @@ class RecoveryControllerStarter(object):
         """
 
         try:
-            self.rc_config.set_record_identifier(notification_id)
+            self.rc_config.set_request_context()
             db_engine = dbapi.get_engine(self.rc_config)
             session = dbapi.get_session(db_engine)
             conf_dict = self.rc_config.get_value('recover_starter')
@@ -395,8 +399,11 @@ class RecoveryControllerStarter(object):
                                 + " primary_id=" + str(primary_id)
                             LOG.info(msg)
 
+                            thread_name = self.rc_util.make_thread_name(
+                                VM_LIST, primary_id)
                             threading.Thread(
                                 target=self.rc_worker.recovery_instance,
+                                name=thread_name,
                                 args=(vm_uuid, primary_id,
                                       sem_recovery_instance)).start()
                     else:
@@ -420,8 +427,11 @@ class RecoveryControllerStarter(object):
                     + " vm_uuid=" + vm_uuid \
                     + " primary_id=" + str(primary_id)
                 LOG.info(msg)
+                thread_name = self.rc_util.make_thread_name(
+                    VM_LIST, primary_id)
                 threading.Thread(
                     target=self.rc_worker.recovery_instance,
+                    name=thread_name,
                     args=(vm_uuid, primary_id,
                           sem_recovery_instance)).start()
 
@@ -540,7 +550,7 @@ class RecoveryControllerStarter(object):
         of outstanding recovery VM at startup.
         """
         try:
-            self.rc_config.set_record_identifier()
+            self.rc_config.set_request_context()
             db_engine = dbapi.get_engine(self.rc_config)
             session = dbapi.get_session(db_engine)
 
@@ -565,8 +575,11 @@ class RecoveryControllerStarter(object):
                         + " vm_uuid=" + vm_uuid \
                         + " primary_id=" + str(primary_id)
                     LOG.info(msg)
+                    thread_name = self.rc_util.make_thread_name(
+                        VM_LIST, primary_id)
                     threading.Thread(
                         target=self.rc_worker.recovery_instance,
+                        name=thread_name,
                         args=(vm_uuid, primary_id, sem)).start()
 
             # Imperfect_recover
