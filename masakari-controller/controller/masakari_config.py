@@ -58,7 +58,7 @@ class RecoveryControllerConfig(object):
         self._get_option(config_path)
 
     def _get_option(self, config_file_path):
-        inifile = ConfigParser.SafeConfigParser()
+        inifile = ConfigParser.RawConfigParser()
         inifile.read(config_file_path)
 
         self.conf_wsgi = {}
@@ -77,6 +77,8 @@ class RecoveryControllerConfig(object):
         log_lv = inifile.get('log', 'log_level')
         self.conf_log['log_level'] = self.syslog_lv[log_lv]
         self.conf_log['log_file'] = inifile.get('log', 'log_file')
+        self.conf_log['logging_context_format_string'] = inifile.get(
+            'log', 'logging_context_format_string')
         self._log_setup()
 
         # insert conf_wsgi dictionary
@@ -209,11 +211,9 @@ class RecoveryControllerConfig(object):
     def set_request_context(self):
         level = self.conf_log.get('log_level')
 
-        logging_context_format_string = '%(asctime)s.%(msecs)03d ' \
-            + '%(process)d %(levelname)s %(name)s ' \
-            + '[%(threadName)s] %(message)s'
         logging.set_defaults(
-            logging_context_format_string=logging_context_format_string,
+            logging_context_format_string=self.conf_log.get(
+                "logging_context_format_string"),
             default_log_levels=logging.get_default_log_levels() +
             ['controller=' + level])
         context.RequestContext()
