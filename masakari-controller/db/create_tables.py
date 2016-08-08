@@ -18,41 +18,10 @@ parentdir = os.path.abspath(os.path.join(os.path.dirname(__file__),
                                          os.path.pardir))
 sys.path = [parentdir] + sys.path
 
-from sqlalchemy import create_engine
-from sqlalchemy_utils.functions import database_exists, create_database
-from controller.masakari_config import RecoveryControllerConfig
-from db.models import Base
 from db import api as dbapi
 
-
-# Todo(sampath): No need this file
-# call dbapi.create_tables() to create tables
-
 try:
-    # retrieve configuration parameters
-    config = RecoveryControllerConfig()
-    conf_db_dic = config.get_value('db')
-    host = conf_db_dic.get("host")
-    db = conf_db_dic.get("name")
-    user = conf_db_dic.get("user")
-    passwd = conf_db_dic.get("passwd")
-    charset = conf_db_dic.get("charset")
-except Exception as e:
-    # error handling
-    print "failed to load configuration parameters."
-    print "Exception: ", e
-    sys.exit(1)
-
-print "host:", host, "db:", db, "user:", user, "passwd:", passwd, "charset:", charset
-
-try:
-    # Create an engine to store data in the database
-    engine = dbapi.get_engine()
-    # Create database if not exists
-    if not database_exists(engine.url):
-        create_database(engine.url)
-    # Create all tables in the engine
-    Base.metadata.create_all(engine)
+    dbapi.create_tables()
 except Exception as e:
     # error handling
     print "failed to create tables."
