@@ -24,17 +24,13 @@ import sys
 import datetime
 import ConfigParser
 import threading
-import syslog
 import traceback
 import json
-# import RecoveryControllerWorker
-# import RecoveryControllerConfig
-# import RecoveryControllerUtil
 import masakari_worker as worker
 import masakari_config as config
 import masakari_util as util
-from eventlet import greenthread
 import os
+from eventlet import greenthread
 
 parentdir = os.path.abspath(os.path.join(os.path.dirname(__file__),
                                          os.path.pardir))
@@ -45,6 +41,11 @@ if parentdir not in sys.path:
     sys.path = [parentdir] + sys.path
 
 import db.api as dbapi
+from oslo_log import log as logging
+
+LOG = logging.getLogger(__name__)
+log_process_begin_and_end = util.LogProcessBeginAndEnd(LOG)
+VM_LIST = "vm_list"
 
 
 class RecoveryControllerStarter(object):
@@ -57,20 +58,20 @@ class RecoveryControllerStarter(object):
     def __init__(self, config_object):
         """
         Constructor:
-        This constructor creates RecoveryControllerUtil object,
-        RecoveryControllerWorker object.
+        This constructor creates RecoveryControllerWorker object.
         """
         self.rc_config = config_object
         self.rc_worker = worker.RecoveryControllerWorker(config_object)
-        self.rc_util = util.RecoveryControllerUtil(config_object)
+        self.rc_util = util.RecoveryControllerUtil()
         self.rc_util_db = util.RecoveryControllerUtilDb(config_object)
         self.rc_util_api = util.RecoveryControllerUtilApi(config_object)
 
+    @log_process_begin_and_end.output_log
     def _compare_timestamp(self, timestamp_1, timestamp_2):
-
         delta = timestamp_1 - timestamp_2
         return long(delta.total_seconds())
 
+    @log_process_begin_and_end.output_log
     def _create_vm_list_db_for_failed_instance(self,
                                                session,
                                                notification_id,
@@ -82,14 +83,21 @@ class RecoveryControllerStarter(object):
             interval_to_be_retry = conf_recover_starter_dic.get(
                 "interval_to_be_retry")
             max_retry_cnt = conf_recover_starter_dic.get("max_retry_cnt")
+
+            msg = "Do get_one_vm_list_by_uuid_create_at_last."
+            LOG.info(msg)
             result = dbapi.get_one_vm_list_by_uuid_create_at_last(
                 session, notification_uuid)
+            msg = "Succeeded in get_one_vm_list_by_uuid_create_at_last. " \
+                + "Return_value = " + str(result)
+            LOG.info(msg)
 
             primary_id = None
             # row_cnt is always 0 or 1
             if not result:
                 primary_id = self.rc_util_db.insert_vm_list_db(
                     session, notification_id, notification_uuid, 0)
+
                 return primary_id
             else:
                 result_progress = result.progress
@@ -106,48 +114,46 @@ class RecoveryControllerStarter(object):
                             notification_id,
                             notification_uuid,
                             result_retry_cnt + 1)
+
                         return primary_id
                     else:
                         # Not insert vm_list db.
-                        self.rc_util.syslogout_ex(
-                            "RecoveryControllerStarter_0004",
-                            syslog.LOG_INFO)
                         msg = "Do not insert a record" \
                             + " into vm_list db because retry_cnt about " \
                             + notification_uuid \
                             + " is over " \
                             + max_retry_cnt \
                             + " times."
-                        self.rc_util.syslogout(msg, syslog.LOG_INFO)
+                        LOG.warning(msg)
+
                         return None
                 elif result_progress == 2 and \
                         delta > long(interval_to_be_retry):
                     primary_id = self.rc_util_db.insert_vm_list_db(
                         session, notification_id, notification_uuid, 0)
+
                     return primary_id
                 else:
                     # Not insert vm_list db.
-                    self.rc_util.syslogout_ex("RecoveryControllerStarter_0005",
-                                              syslog.LOG_INFO)
                     msg = "Do not insert a record " \
                         + "into vm_list db because progress of " \
                         + notification_uuid \
                         + " is " \
                         + str(result_progress)
-                    self.rc_util.syslogout(msg, syslog.LOG_INFO)
+                    LOG.warning(msg)
+
                     return None
 
         except KeyError:
-            self.rc_util.syslogout_ex("RecoveryControllerStarter_0007",
-                                      syslog.LOG_ERR)
             error_type, error_value, traceback_ = sys.exc_info()
             tb_list = traceback.format_tb(traceback_)
-            self.rc_util.syslogout(error_type, syslog.LOG_ERR)
-            self.rc_util.syslogout(error_value, syslog.LOG_ERR)
+            LOG.error(error_type)
+            LOG.error(error_value)
             for tb in tb_list:
-                self.rc_util.syslogout(tb, syslog.LOG_ERR)
+                LOG.error(tb)
             raise KeyError
 
+    @log_process_begin_and_end.output_log
     def _create_vm_list_db_for_failed_host(self, session,
                                            notification_id,
                                            notification_uuid):
@@ -158,33 +164,38 @@ class RecoveryControllerStarter(object):
             interval_to_be_retry = conf_recover_starter_dic.get(
                 "interval_to_be_retry")
             max_retry_cnt = conf_recover_starter_dic.get("max_retry_cnt")
+
+            msg = "Do get_one_vm_list_by_uuid_and_progress_create_at_last."
+            LOG.info(msg)
             row_cnt = dbapi.get_one_vm_list_by_uuid_and_progress_create_at_last(
                 session,
                 notification_uuid)
+            msg = "Succeeded in " \
+                + "get_one_vm_list_by_uuid_and_progress_create_at_last. " \
+                + "Return_value = " + str(row_cnt)
+            LOG.info(msg)
 
             primary_id = None
             if row_cnt == 0:
                 primary_id = self.rc_util_db.insert_vm_list_db(
                     session, notification_id, notification_uuid, 0)
+
                 return primary_id
             else:
-                self.rc_util.syslogout_ex("RecoveryControllerStarter_0008",
-                                          syslog.LOG_INFO)
                 msg = "Do not insert a record into vm_list db " \
                       "because there are same uuid records that " \
                       "progress is 0 or 1."
-                self.rc_util.syslogout(msg, syslog.LOG_INFO)
+                LOG.warning(msg)
+
                 return None
 
         except KeyError:
-            self.rc_util.syslogout_ex("RecoveryControllerStarter_0010",
-                                      syslog.LOG_ERR)
             error_type, error_value, traceback_ = sys.exc_info()
             tb_list = traceback.format_tb(traceback_)
-            self.rc_util.syslogout(error_type, syslog.LOG_ERR)
-            self.rc_util.syslogout(error_value, syslog.LOG_ERR)
+            LOG.error(error_type)
+            LOG.error(error_value)
             for tb in tb_list:
-                self.rc_util.syslogout(tb, syslog.LOG_ERR)
+                LOG.error(tb)
             raise KeyError
 
     def add_failed_instance(self, notification_id,
@@ -201,7 +212,8 @@ class RecoveryControllerStarter(object):
         """
 
         try:
-            db_engine = dbapi.get_engine()
+            self.rc_config.set_request_context()
+            db_engine = dbapi.get_engine(self.rc_config)
             session = dbapi.get_session(db_engine)
 
             # Get primary id of vm_list
@@ -214,47 +226,42 @@ class RecoveryControllerStarter(object):
             sem_recovery_instance = threading.Semaphore(1)
             # create and start thread
             if primary_id:
-                if retry_mode == True:
+                if retry_mode is True:
                     # Skip recovery_instance.
                     # Will delegate to handle_pending_instances
-                    self.rc_util.syslogout_ex("RecoveryControllerStarter_0027",
-                                              syslog.LOG_INFO)
                     msg = "RETRY MODE. Skip recovery_instance thread" \
                         + " vm_uuide=" + notification_uuid \
                         + " notification_id=" + notification_id
-                    self.rc_util.syslogout(msg, syslog.LOG_INFO)
+                    LOG.info(msg)
                 else:
-                    self.rc_util.syslogout_ex("RecoveryControllerStarter_0029",
-                                              syslog.LOG_INFO)
                     msg = "Run thread rc_worker.recovery_instance." \
                         + " notification_uuid=" + notification_uuid \
                         + " primary_id=" + str(primary_id)
-                    self.rc_util.syslogout(msg, syslog.LOG_INFO)
-
+                    LOG.info(msg)
+                    thread_name = self.rc_util.make_thread_name(
+                        VM_LIST, primary_id)
                     threading.Thread(target=self.rc_worker.recovery_instance,
+                                     name=thread_name,
                                      args=(notification_uuid, primary_id,
                                            sem_recovery_instance)).start()
+
             return
 
         except KeyError:
-            self.rc_util.syslogout_ex("RecoveryControllerStarter_0012",
-                                      syslog.LOG_ERR)
             error_type, error_value, traceback_ = sys.exc_info()
             tb_list = traceback.format_tb(traceback_)
-            self.rc_util.syslogout(error_type, syslog.LOG_ERR)
-            self.rc_util.syslogout(error_value, syslog.LOG_ERR)
+            LOG.error(error_type)
+            LOG.error(error_value)
             for tb in tb_list:
-                self.rc_util.syslogout(tb, syslog.LOG_ERR)
+                LOG.error(tb)
             return
         except:
-            self.rc_util.syslogout_ex("RecoveryControllerStarter_0013",
-                                      syslog.LOG_ERR)
             error_type, error_value, traceback_ = sys.exc_info()
             tb_list = traceback.format_tb(traceback_)
-            self.rc_util.syslogout(error_type, syslog.LOG_ERR)
-            self.rc_util.syslogout(error_value, syslog.LOG_ERR)
+            LOG.error(error_type)
+            LOG.error(error_value)
             for tb in tb_list:
-                self.rc_util.syslogout(tb, syslog.LOG_ERR)
+                LOG.error(tb)
             return
 
     def add_failed_host(self,
@@ -273,7 +280,8 @@ class RecoveryControllerStarter(object):
         """
 
         try:
-            db_engine = dbapi.get_engine()
+            self.rc_config.set_request_context()
+            db_engine = dbapi.get_engine(self.rc_config)
             session = dbapi.get_session(db_engine)
             conf_dict = self.rc_config.get_value('recover_starter')
             recovery_max_retry_cnt = conf_dict.get('recovery_max_retry_cnt')
@@ -284,10 +292,8 @@ class RecoveryControllerStarter(object):
 
             # Count vm_list
             if len(vm_list) == 0:
-                self.rc_util.syslogout_ex("RecoveryControllerStarter_0014",
-                                          syslog.LOG_INFO)
                 msg = "There is no instance in " + notification_hostname + "."
-                self.rc_util.syslogout(msg, syslog.LOG_INFO)
+                LOG.info(msg)
 
                 # update record in notification_list
                 self.rc_util_db.update_notification_list_db(
@@ -295,53 +301,77 @@ class RecoveryControllerStarter(object):
 
                 return
             else:
+                msg = "Do get_all_notification_list_by_id_for_update."
+                LOG.info(msg)
                 result = dbapi.get_all_notification_list_by_id_for_update(
                     session, notification_id)
+                msg = "Succeeded in " \
+                    + "get_all_notification_list_by_id_for_update. " \
+                    + "Return_value = " + str(result)
+                LOG.info(msg)
                 recover_to = result.pop().recover_to
 
                 if retry_mode is False:
+                    msg = "Do get_all_reserve_list_by_hostname_not_deleted."
+                    LOG.info(msg)
                     cnt = dbapi.get_all_reserve_list_by_hostname_not_deleted(
                         session,
                         recover_to)
+                    msg = "Succeeded in " \
+                        + "get_all_reserve_list_by_hostname_not_deleted. " \
+                        + "Return_value = " + str(cnt)
+                    LOG.info(msg)
 
                     if not cnt:
+                        msg = "Do " \
+                            + "get_one_reserve_list_by_cluster_port_for_update."
+                        LOG.info(msg)
                         cnt = dbapi.\
                             get_one_reserve_list_by_cluster_port_for_update(
                                 session,
                                 notification_cluster_port,
                                 notification_hostname
                             )
+                        msg = "Succeeded in " \
+                            + "get_one_reserve_list_by_cluster_port_for_update. " \
+                            + "Return_value = " + str(cnt)
+                        LOG.info(msg)
 
                         if not cnt:
-                            self.rc_util.syslogout_ex(
-                                "RecoveryControllerStarter_0022",
-                                syslog.LOG_WARNING)
                             msg = "The reserve node not exist in " \
                                   "reserve_list DB, " \
                                   "so do not recover instances."
-                            self.rc_util.syslogout(msg, syslog.LOG_WARNING)
+                            LOG.warning(msg)
                             self.rc_util_db.update_notification_list_db(
                                 'progress', 3, notification_id)
+
                             return
 
                         result = cnt.pop()
                         recover_to = result.hostname
                         update_at = datetime.datetime.now()
+                        msg = "Do " \
+                            + "update_notification_list_by_notification_id_recover_to."
+                        LOG.info(msg)
                         dbapi.update_notification_list_by_notification_id_recover_to(
                             session,
                             notification_id,
                             update_at,
                             recover_to
                         )
-
-                        self.rc_util.syslogout_ex(
-                            "RecoveryControllerStarter_0024", syslog.LOG_INFO)
-                self.rc_util.syslogout_ex("RecoveryControllerStarter_0015",
-                                          syslog.LOG_INFO)
+                        msg = "Succeeded in " \
+                            + "update_notification_list_by_notification_id_recover_to."
+                        LOG.info(msg)
 
                 delete_at = datetime.datetime.now()
+
+                msg = "Do update_reserve_list_by_hostname_as_deleted."
+                LOG.info(msg)
                 dbapi.update_reserve_list_by_hostname_as_deleted(
                     session, recover_to, delete_at)
+                msg = "Succeeded in " \
+                    + "update_reserve_list_by_hostname_as_deleted."
+                LOG.info(msg)
             # create semaphore (Multiplicity is get from config.)
             conf_dict = self.rc_config.get_value('recover_starter')
             sem_recovery_instance = threading.Semaphore(
@@ -356,25 +386,28 @@ class RecoveryControllerStarter(object):
                         session, notification_id, vm_uuid)
 
                     if primary_id:
-                        if retry_mode == True:
+                        if retry_mode is True:
                             # Skip recovery_instance thread. Will delegate to
                             # ...
                             msg = "RETRY MODE. Skip recovery_instance thread" \
                                 + " vm_uuide=" + vm_uuid \
                                 + " notification_id=" + notification_id
-                            self.rc_util.syslogout(msg, syslog.LOG_INFO)
+                            LOG.info(msg)
                         else:
                             msg = "Run thread rc_worker.recovery_instance." \
                                 + " vm_uuid=" + vm_uuid \
                                 + " primary_id=" + str(primary_id)
-                            self.rc_util.syslogout(msg, syslog.LOG_INFO)
+                            LOG.info(msg)
 
+                            thread_name = self.rc_util.make_thread_name(
+                                VM_LIST, primary_id)
                             threading.Thread(
                                 target=self.rc_worker.recovery_instance,
+                                name=thread_name,
                                 args=(vm_uuid, primary_id,
                                       sem_recovery_instance)).start()
                     else:
-                        if retry_mode == True:
+                        if retry_mode is True:
                             continue
                         else:
                             incomplete_list.append(vm_uuid)
@@ -390,14 +423,15 @@ class RecoveryControllerStarter(object):
                     session, notification_id, vm_uuid, 0)
 
                 # Skip recovery_instance thread. Will delegate to ...
-                self.rc_util.syslogout_ex("RecoveryControllerStarter_0031",
-                                          syslog.LOG_INFO)
                 msg = "Run thread rc_worker.recovery_instance." \
                     + " vm_uuid=" + vm_uuid \
                     + " primary_id=" + str(primary_id)
-                self.rc_util.syslogout(msg, syslog.LOG_INFO)
+                LOG.info(msg)
+                thread_name = self.rc_util.make_thread_name(
+                    VM_LIST, primary_id)
                 threading.Thread(
                     target=self.rc_worker.recovery_instance,
+                    name=thread_name,
                     args=(vm_uuid, primary_id,
                           sem_recovery_instance)).start()
 
@@ -408,26 +442,23 @@ class RecoveryControllerStarter(object):
             return
 
         except KeyError:
-            self.rc_util.syslogout_ex("RecoveryControllerStarter_0017",
-                                      syslog.LOG_ERR)
             error_type, error_value, traceback_ = sys.exc_info()
             tb_list = traceback.format_tb(traceback_)
-            self.rc_util.syslogout(error_type, syslog.LOG_ERR)
-            self.rc_util.syslogout(error_value, syslog.LOG_ERR)
+            LOG.error(error_type)
+            LOG.error(error_value)
             for tb in tb_list:
-                self.rc_util.syslogout(tb, syslog.LOG_ERR)
+                LOG.error(tb)
             return
         except:
-            self.rc_util.syslogout_ex("RecoveryControllerStarter_0018",
-                                      syslog.LOG_ERR)
             error_type, error_value, traceback_ = sys.exc_info()
             tb_list = traceback.format_tb(traceback_)
-            self.rc_util.syslogout(error_type, syslog.LOG_ERR)
-            self.rc_util.syslogout(error_value, syslog.LOG_ERR)
+            LOG.error(error_type)
+            LOG.error(error_value)
             for tb in tb_list:
-                self.rc_util.syslogout(tb, syslog.LOG_ERR)
+                LOG.error(tb)
             return
 
+    @log_process_begin_and_end.output_log
     def _update_old_records_vm_list(self, session):
         conf_dict = self.rc_config.get_value('recover_starter')
         notification_expiration_sec = int(conf_dict.get(
@@ -436,20 +467,21 @@ class RecoveryControllerStarter(object):
         border_time = now - \
             datetime.timedelta(seconds=notification_expiration_sec)
         border_time_str = border_time.strftime('%Y-%m-%d %H:%M:%S')
-        self.rc_util.syslogout_ex("RecoveryControllerStarter_0026",
-                                  syslog.LOG_INFO)
+
+        msg = "Do get_old_records_vm_list."
+        LOG.info(msg)
         result = dbapi.get_old_records_vm_list(
             session,
             border_time_str,
             border_time_str
         )
-        self.rc_util.syslogout(result, syslog.LOG_INFO)
+        msg = "Succeeded in get_old_records_vm_list. " \
+            + "Return_value = " + str(result)
+        LOG.info(msg)
 
         if result:
-            self.rc_util.syslogout_ex("RecoveryControllerStarter_0035",
-                                      syslog.LOG_INFO)
             msg = 'Old and incomplete records will be skipped.'
-            self.rc_util.syslogout(msg, syslog.LOG_INFO)
+            LOG.info(msg)
 
             # Set progress = 4 for old record
             for row in result:
@@ -457,20 +489,33 @@ class RecoveryControllerStarter(object):
                               'update_at': datetime.datetime.now(),
                               'delete_at': datetime.datetime.now()
                               }
+                msg = "Do update_vm_list_by_id_dict."
+                LOG.info(msg)
                 dbapi.update_vm_list_by_id_dict(session, row.id, update_val)
-                self.rc_util.syslogout_ex("RecoveryControllerStarter_0036",
-                                          syslog.LOG_INFO)
+                msg = "Succeeded in update_vm_list_by_id_dict."
+                LOG.info(msg)
 
+    @log_process_begin_and_end.output_log
     def _find_reprocessing_records_vm_list(self, session):
         return_value = []
+        msg = "Do get_all_vm_list_by_progress."
+        LOG.info(msg)
         result = dbapi.get_all_vm_list_by_progress(session)
+        msg = "Succeeded in get_all_vm_list_by_progress. " \
+            + "Return_value = " + str(result)
+        LOG.info(msg)
 
         # UUID to see one by one, and look for the re-processing target record
         for row in result:
+            msg = "Do get_vm_list_by_uuid_and_progress_sorted."
+            LOG.info(msg)
             result2 = dbapi.get_vm_list_by_uuid_and_progress_sorted(
                 session,
                 row.uuid
             )
+            msg = "Succeeded in get_vm_list_by_uuid_and_progress_sorted. " \
+                + "Return_value = " + str(result2)
+            LOG.info(msg)
 
             row_cnt = 0
             for row2 in result2:
@@ -479,18 +524,20 @@ class RecoveryControllerStarter(object):
                     return_value.append(row2)
                 # Update progress that is not the re-processing target
                 else:
-                    self.rc_util.syslogout_ex(
-                        "RecoveryControllerStarter_0039", syslog.LOG_INFO)
                     update_val = {'progress': 4,
                                   'update_at': datetime.datetime.now(),
                                   'delete_at': datetime.datetime.now()
                                   }
 
+                    msg = "Do update_vm_list_by_id_dict."
+                    LOG.info(msg)
                     dbapi.update_vm_list_by_id_dict(
                         session,
                         row2.id,
                         update_val
                     )
+                    msg = "Succeeded in update_vm_list_by_id_dict."
+                    LOG.info(msg)
 
                 row_cnt += 1
 
@@ -503,7 +550,8 @@ class RecoveryControllerStarter(object):
         of outstanding recovery VM at startup.
         """
         try:
-            db_engine = dbapi.get_engine()
+            self.rc_config.set_request_context()
+            db_engine = dbapi.get_engine(self.rc_config)
             session = dbapi.get_session(db_engine)
 
             self._update_old_records_vm_list(session)
@@ -523,14 +571,15 @@ class RecoveryControllerStarter(object):
                 for row in result:
                     vm_uuid = row.uuid
                     primary_id = row.id
-                    self.rc_util.syslogout_ex("RecoveryControllerStarter_0032",
-                                              syslog.LOG_INFO)
                     msg = "Run thread rc_worker.recovery_instance." \
                         + " vm_uuid=" + vm_uuid \
                         + " primary_id=" + str(primary_id)
-                    self.rc_util.syslogout(msg, syslog.LOG_INFO)
+                    LOG.info(msg)
+                    thread_name = self.rc_util.make_thread_name(
+                        VM_LIST, primary_id)
                     threading.Thread(
                         target=self.rc_worker.recovery_instance,
+                        name=thread_name,
                         args=(vm_uuid, primary_id, sem)).start()
 
             # Imperfect_recover
@@ -539,22 +588,18 @@ class RecoveryControllerStarter(object):
 
             return
         except KeyError:
-            self.rc_util.syslogout_ex("RecoveryControllerStarter_0020",
-                                      syslog.LOG_ERR)
             error_type, error_value, traceback_ = sys.exc_info()
             tb_list = traceback.format_tb(traceback_)
-            self.rc_util.syslogout(error_type, syslog.LOG_ERR)
-            self.rc_util.syslogout(error_value, syslog.LOG_ERR)
+            LOG.error(error_type)
+            LOG.error(error_value)
             for tb in tb_list:
-                self.rc_util.syslogout(tb, syslog.LOG_ERR)
+                LOG.error(tb)
             return
         except:
-            self.rc_util.syslogout_ex("RecoveryControllerStarter_0021",
-                                      syslog.LOG_ERR)
             error_type, error_value, traceback_ = sys.exc_info()
             tb_list = traceback.format_tb(traceback_)
-            self.rc_util.syslogout(error_type, syslog.LOG_ERR)
-            self.rc_util.syslogout(error_value, syslog.LOG_ERR)
+            LOG.error(error_type)
+            LOG.error(error_value)
             for tb in tb_list:
-                self.rc_util.syslogout(tb, syslog.LOG_ERR)
+                LOG.error(tb)
             return

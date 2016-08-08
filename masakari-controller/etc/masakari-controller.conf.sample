@@ -13,6 +13,8 @@ innodb_lock_wait_timeout = 10
 
 [log]
 log_level = info
+log_file = /var/log/masakari/masakari-controller.log
+logging_context_format_string = %(asctime)s.%(msecs)03d %(process)d %(levelname)s %(name)s [%(threadName)s] %(message)s
 
 [recover_starter]
 interval_to_be_retry = 300

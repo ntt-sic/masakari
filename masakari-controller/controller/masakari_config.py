@@ -24,8 +24,17 @@ import syslog
 import paramiko
 import sys
 import os
-import logging
 import socket
+import threading
+import errno
+import uuid
+
+from oslo_config import cfg
+from oslo_log import log as logging
+from oslo_context import context
+
+
+LOG = logging.getLogger(__name__)
 
 
 class RecoveryControllerConfig(object):
@@ -42,37 +51,41 @@ class RecoveryControllerConfig(object):
         that are specified in the configuration file in the dictionary type
         for each section.
         """
+
         if not config_path:
             config_path = '/etc/masakari/masakari-controller.conf'
 
         self._get_option(config_path)
 
     def _get_option(self, config_file_path):
-
-        inifile = ConfigParser.SafeConfigParser()
+        inifile = ConfigParser.RawConfigParser()
         inifile.read(config_file_path)
 
         self.conf_wsgi = {}
         self.conf_ssh = {}
         self.conf_db = {}
         self.conf_log = {}
-        self.syslog_lv = {'debug': syslog.LOG_DEBUG,
-                          'info': syslog.LOG_INFO,
-                          'notice': syslog.LOG_NOTICE,
-                          'warning': syslog.LOG_WARNING,
-                          'err': syslog.LOG_ERR}
+        self.syslog_lv = {'debug': 'DEBUG',
+                          'info': 'INFO',
+                          'warning': 'WARNING',
+                          'error': 'ERROR',
+                          'critical': 'CRITICAL'}
         self.config_recover_starter = {}
         self.config_nova = {}
+
+        # insert conf_log dictionary
+        log_lv = inifile.get('log', 'log_level')
+        self.conf_log['log_level'] = self.syslog_lv[log_lv]
+        self.conf_log['log_file'] = inifile.get('log', 'log_file')
+        self.conf_log['logging_context_format_string'] = inifile.get(
+            'log', 'logging_context_format_string')
+        self._log_setup()
 
         # insert conf_wsgi dictionary
         self.conf_wsgi = self._set_wsgi_section(inifile)
 
         # insert conf_db dictionary
         self.conf_db = self._set_db_section(inifile)
-
-        # insert conf_log dictionary
-        log_lv = inifile.get('log', 'log_level')
-        self.conf_log['log_level'] = self.syslog_lv[log_lv]
 
         # insert conf_recover_starter dictionary
         self.conf_recover_starter = self._set_recover_starter_section(inifile)
@@ -168,3 +181,41 @@ class RecoveryControllerConfig(object):
         else:
             dicNull = {}
             return dicNull
+
+    def _log_setup(self):
+
+        CONF = cfg.CONF
+
+        self.set_request_context()
+
+        DOMAIN = "masakari"
+        CONF.log_file = self.conf_log.get("log_file")
+        CONF.use_stderr = False
+
+        logging.register_options(CONF)
+        logging.setup(CONF, DOMAIN)
+
+        log_dir = os.path.dirname(self.conf_log.get("log_file"))
+
+        # create log dir if not created
+        try:
+            os.makedirs(log_dir)
+        except OSError as exc:
+            if exc.errno == errno.EEXIST and os.path.isdir(log_dir):
+                pass
+            else:
+                raise
+
+        return
+
+    def set_request_context(self):
+        level = self.conf_log.get('log_level')
+
+        logging.set_defaults(
+            logging_context_format_string=self.conf_log.get(
+                "logging_context_format_string"),
+            default_log_levels=logging.get_default_log_levels() +
+            ['controller=' + level])
+        context.RequestContext()
+
+        return
