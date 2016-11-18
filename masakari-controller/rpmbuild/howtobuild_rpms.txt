@@ -13,11 +13,11 @@ $mkdir -p ~/rpmbuild/{BUILD,RPMS,SOURCES,SPECS,SRPMS}
 
 $cd masakari
 $tar czvf masakari-controller.tar.gz masakari-controller --exclude='masakari-controller/debian' --exclude='masakari-controller/rpmbuild'
-mv masakari-controller.tar.gz ~/rpmbuild/SOURCES/
-cp masakari-controller/rpmbuild/SPECS/processmonitor.spec ~/rpmbuild/SPECS/
-cd ~/rpmbuild/SPECS/
-rpmbuild --bb hostmonitor.spec
+$mv masakari-controller.tar.gz ~/rpmbuild/SOURCES/
+$cp masakari-controller/rpmbuild/SPECS/masakari-controller.spec ~/rpmbuild/SPECS/
+$cd ~/rpmbuild/SPECS/
+$rpmbuild --bb masakari-controller.spec
 
 rpms are in,
-cd ~/rpmbuild/RPMS/ARCH
+$ls -l ~/rpmbuild/RPMS/<ARCH>
 # Substitute "ARCH" for your architecture
