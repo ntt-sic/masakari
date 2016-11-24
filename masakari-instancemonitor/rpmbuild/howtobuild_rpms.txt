@@ -13,11 +13,11 @@ $mkdir -p ~/rpmbuild/{BUILD,RPMS,SOURCES,SPECS,SRPMS}
 
 $cd masakari
 $tar czvf masakari-instancemonitor.tar.gz masakari-instancemonitor --exclude='masakari-instancemonitor/debian' --exclude='masakari-instancemonitor/rpmbuild'
-mv masakari-instancemonitor.tar.gz ~/rpmbuild/SOURCES/
-cp masakari-instancemonitor/rpmbuild/SPECS/processmonitor.spec ~/rpmbuild/SPECS/
-cd ~/rpmbuild/SPECS/
-rpmbuild --bb instancemonitor.spec
+$mv masakari-instancemonitor.tar.gz ~/rpmbuild/SOURCES/
+$cp masakari-instancemonitor/rpmbuild/SPECS/masakari-instancemonitor.spec ~/rpmbuild/SPECS/
+$cd ~/rpmbuild/SPECS/
+$rpmbuild --bb masakari-instancemonitor.spec
 
 rpms are in,
-cd ~/rpmbuild/RPMS/ARCH
+$ls -l ~/rpmbuild/RPMS/<ARCH>
 # Substitute "ARCH" for your architecture
