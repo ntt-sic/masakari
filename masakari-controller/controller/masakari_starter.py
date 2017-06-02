@@ -167,16 +167,16 @@ class RecoveryControllerStarter(object):
 
             msg = "Do get_one_vm_list_by_uuid_and_progress_create_at_last."
             LOG.info(msg)
-            row_cnt = dbapi.get_one_vm_list_by_uuid_and_progress_create_at_last(
+            result = dbapi.get_one_vm_list_by_uuid_and_progress_create_at_last(
                 session,
                 notification_uuid)
             msg = "Succeeded in " \
                 + "get_one_vm_list_by_uuid_and_progress_create_at_last. " \
-                + "Return_value = " + str(row_cnt)
+                + "Return_value = " + str(result)
             LOG.info(msg)
 
             primary_id = None
-            if row_cnt == 0:
+            if not result:
                 primary_id = self.rc_util_db.insert_vm_list_db(
                     session, notification_id, notification_uuid, 0)
 
