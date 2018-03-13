@@ -1,3 +1,11 @@
+# [UNMAINTAINED]
+Current version of masakari is maintained as a OpenStack official project [1]. Current documentation is here [2]. Since we are actively developing latest version of masakari in [1], I would like to tag this repo as UNMAINTAINED. Thank you all for your contribution and support.
+Please feel free to contact masakari team for any help on latest version of masakari or any other masakari related issues.
+
+[1] https://wiki.openstack.org/wiki/Masakari
+
+[2] https://docs.openstack.org/masakari/latest/
+
 # Masakari
 
 ## What is Masakari ?
