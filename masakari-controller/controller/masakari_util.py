@@ -749,6 +749,28 @@ class RecoveryControllerUtilApi(object):
             LOG.error(msg)
             raise
 
+    def check_compute_node_state(self, hostname, state):
+        """Check state (up or down) of specified compute node.
+
+        :hostname : hostname of compute node to check state.
+        :state : return True if current state of target compute node equals this value.
+        """
+        try:
+            msg = 'Call compute services API with hostname={0} state={1}'.format(hostname, state)
+            LOG.info(msg)
+            services = self.nova_client.services.list()
+            for service in services:
+                if service.binary != 'nova-compute':
+                    continue
+                if service.host == hostname and service.state == state:
+                    return True
+            return False
+
+        except exceptions.ClientException as e:
+            msg = 'Fails to Call compute services API with hostname={0} state={1}: {2}'.format(hostname, state, e)
+            LOG.error(msg)
+            raise
+
 
 class RecoveryControllerUtil(object):
 

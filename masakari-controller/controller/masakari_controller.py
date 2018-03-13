@@ -31,6 +31,7 @@ import os
 import errno
 import traceback
 import logging
+import calendar
 from eventlet import wsgi
 from eventlet import greenthread
 from sqlalchemy import exc
@@ -46,6 +47,7 @@ if parentdir not in sys.path:
 import controller.masakari_starter as starter
 from controller.masakari_util import RecoveryControllerUtil as util
 from controller.masakari_util import RecoveryControllerUtilDb as util_db
+from controller.masakari_util import RecoveryControllerUtilApi as util_api
 from controller.masakari_util import LogProcessBeginAndEnd
 from oslo_log import log as oslo_logging
 import controller.masakari_config as config
@@ -87,6 +89,7 @@ class RecoveryController(object):
             self.rc_starter = starter.RecoveryControllerStarter(
                 self.rc_config)
             self.rc_util_db = util_db(self.rc_config)
+            self.rc_util_api = util_api(self.rc_config)
             self.rc_worker = worker.RecoveryControllerWorker(self.rc_config)
 
         except Exception as e:
@@ -481,15 +484,29 @@ class RecoveryController(object):
                                 False, ))
                         th.start()
 
-                        # Sleep until nova recognizes the node down.
                         dic = self.rc_config.get_value('recover_starter')
                         node_err_wait = dic.get("node_err_wait")
-                        msg = ("Sleeping %s sec before starting recovery"
-                               "thread until nova recognizes the node down..."
+                        msg = ("Before starting recovery thread"
+                               "check repeatedly whether nova recognizes"
+                               "the node is down (max %s sec)"
                                % (node_err_wait)
                                )
                         LOG.info(msg)
-                        greenthread.sleep(int(node_err_wait))
+
+                        node_err_retry_interval = 10
+                        node_err_retry_until = calendar.timegm(datetime.datetime.utcnow().timetuple()) + int(node_err_wait)
+                        target_hostname = notification_list_dic.get("notification_hostname")
+                        LOG.info('target hostname: {0}'.format(target_hostname))
+                        while True:
+                            if calendar.timegm(datetime.datetime.utcnow().timetuple()) > node_err_retry_until:
+                                break
+
+                            LOG.info('check whether the node is down')
+                            is_down = self.rc_util_api.check_compute_node_state(hostname=target_hostname, state='down')
+                            if is_down:
+                                break
+                            else:
+                                greenthread.sleep(int(node_err_retry_interval))
 
                         retry_mode = False
                         msg = "Run thread rc_starter.add_failed_host." \
